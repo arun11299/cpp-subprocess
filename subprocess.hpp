@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cassert>
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include <sstream>
 #include <type_traits>
@@ -151,8 +152,9 @@ namespace util
 
 
 // Popen Arguments
-struct bufsiz { int bufsiz; };
-struct defer_spawn { bool defer; };
+struct bufsiz      { int  bufsiz = 0; };
+struct defer_spawn { bool defer  = false; };
+struct close_fds   { bool close_all = false; };
 
 struct string_arg
 {
@@ -227,15 +229,20 @@ struct output
 };
 
 struct error {
-  error(int fd): err_ch_(fd) {}
+  error(int fd): wr_ch_(fd) {}
 
   error(const char* filename) {
-    int fd = open(filename, O_RDWR|O_APPEND);
+    int fd = open(filename, O_APPEND | O_CREAT | O_RDWR, 0640); 
     if (fd == -1) throw OSError("File not found: ", errno);
-    err_ch_ = fd;
+    wr_ch_ = fd;
+  }
+  error(IOTYPE typ) {
+    assert (typ == PIPE);
+    std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
   }
 
-  int err_ch_ = -1;
+  int rd_ch_ = -1;
+  int wr_ch_ = -1;
 };
 
 // ~~~~ End Popen Args ~~~~
@@ -278,6 +285,8 @@ struct ArgumentDeducer
 
   void set_option(error&& err);
 
+  void set_option(close_fds&& cfds);
+
 private:
   Popen* popen_ = nullptr;
 };
@@ -297,7 +306,14 @@ public:
     vargs_ = util::split(cmd_args);
     init_args(std::forward<Args>(args)...);
 
-    if (!defer_process_start_) execute_process();
+    try {
+      if (!defer_process_start_) execute_process();
+    } catch (const std::exception& e) {
+      cleanup_fds();
+      throw e;
+    }
+
+    setup_comm_channels();
   }
 
   template <typename... Args>
@@ -305,7 +321,15 @@ public:
   {
     vargs_.insert(vargs_.end(), cmd_args.begin(), cmd_args.end());
     init_args(std::forward<Args>(args)...);
-    if (!defer_process_start_) execute_process();
+
+    try {
+      if (!defer_process_start_) execute_process();
+    } catch (const std::exception& e) {
+      cleanup_fds();
+      throw e;
+    }
+
+    setup_comm_channels();
   }
 
   void start_process() throw (CalledProcessError, OSError)
@@ -319,17 +343,31 @@ public:
       assert (0); 
       return;
     }
-    execute_process();
+    try {
+      execute_process();
+    } catch (const std::exception& e) {
+      cleanup_fds();
+      throw e;
+    }
+
+    setup_comm_channels();
   }
+
+  FILE* input()  { return input_;  }
+  FILE* output() { return output_; }
+  FILE* error()  { return error_;  }
 
 private:
   template <typename... Args>
   void init_args(Args&&... args);
   void populate_c_argv();
   void execute_process() throw (CalledProcessError, OSError);
+  void cleanup_fds();
+  void setup_comm_channels();
 
 private:
   bool defer_process_start_ = false;
+  bool close_fds_ = false;
   int bufsiz_ = 0;
   std::string exe_name_;
   std::string cwd_;
@@ -379,6 +417,49 @@ void Popen::populate_c_argv()
 {
   cargv_.reserve(vargs_.size());
   for (auto& arg : vargs_) cargv_.push_back(&arg[0]);
+}
+
+void Popen::cleanup_fds()
+{
+  if (write_to_child_ != -1 && read_from_parent_ != -1) {
+    close(write_to_child_);
+    close(read_from_parent_);
+  }
+
+  if (write_to_parent_ != -1 && read_from_child_ != -1) {
+    close(write_to_parent_);
+    close(read_from_child_);
+  }
+
+  if (err_write_ != -1 && err_read_ != -1) {
+    close(err_write_);
+    close(err_read_);
+  }
+}
+
+void Popen::setup_comm_channels()
+{
+  if (write_to_child_ != -1) {
+    input_ = fdopen(write_to_child_, "wb");
+  }
+  if (write_to_parent_ != -1) {
+    output_ = fdopen(write_to_parent_, "rb");
+  }
+  if (err_read_ != -1) {
+    error_ = fdopen(err_read_, "rb");
+  }
+
+  auto handles = {input_, output_, error_};
+  for (auto& h : handles) {
+    //TODO: error checking
+    if (h == nullptr) continue;
+    if (bufsiz_ == 0)
+      setvbuf(h, nullptr, _IONBF, BUFSIZ);
+    else if (bufsiz_ == 1)
+      setvbuf(h, nullptr, _IONBF, BUFSIZ);
+    else
+      setvbuf(h, nullptr, _IOFBF, bufsiz_);
+  }
 }
 
 
@@ -438,12 +519,15 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
       if (err_write_ != -1 && err_write_ > 2) close(err_write_);
 
       // Close all the inherited fd's except the error write pipe
-      // TODO: Check for the option 
-      int max_fd = sysconf(_SC_OPEN_MAX);
-      if (max_fd == -1) throw OSError("sysconf failed", errno);
-      for (int i = 3; i < max_fd; i++) {
-	if (i == err_wr_pipe) continue;
-	close(i);
+      if (close_fds_) {
+	int max_fd = sysconf(_SC_OPEN_MAX);
+
+	if (max_fd == -1) throw OSError("sysconf failed", errno);
+
+	for (int i = 3; i < max_fd; i++) {
+	  if (i == err_wr_pipe) continue;
+	  close(i);
+	}
       }
 
       // Change the working directory if provided
@@ -532,6 +616,12 @@ namespace detail {
   }
 
   void ArgumentDeducer::set_option(error&& err) {
+    popen_->err_write_ = err.wr_ch_;
+    if (err.rd_ch_ != -1) popen_->err_read_ = err.rd_ch_;
+  }
+
+  void ArgumentDeducer::set_option(close_fds&& cfds) {
+    popen_->close_fds_ = cfds.close_all;
   }
 
 
