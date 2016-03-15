@@ -1,5 +1,5 @@
-#include <iostream>
 #include <map>
+#include <iostream>
 #include <string>
 #include <cstdlib>
 #include <cassert>
@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <vector>
 #include <sstream>
-#include <type_traits>
+#include <memory>
 #include <initializer_list>
 #include <exception>
 
@@ -47,7 +47,7 @@ public:
 
 namespace util
 {
-  std::vector<std::string>
+  static std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
     std::vector<std::string> res;
@@ -67,6 +67,7 @@ namespace util
     return res;
   }
 
+  static
   std::string join(const std::vector<std::string>& vec,
 		   const std::string& sep = " ")
   {
@@ -76,15 +77,17 @@ namespace util
     return res;
   }
 
+  static
   void set_clo_on_exec(int fd, bool set = true)
   {
-    int flags = fcntl(fd, F_GETFL, 0);
+    int flags = fcntl(fd, F_GETFD, 0);
     if (set) flags |= FD_CLOEXEC;
     else flags &= ~FD_CLOEXEC;
     //TODO: should check for errors
-    fcntl(fd, F_SETFL, flags);
+    fcntl(fd, F_SETFD, flags);
   }
 
+  static
   std::pair<int, int> pipe_cloexec()
   {
     int pipe_fds[2];
@@ -100,6 +103,7 @@ namespace util
   }
 
 
+  static
   int write_n(int fd, const char* buf, size_t length)
   {
     int nwritten = 0;
@@ -111,6 +115,7 @@ namespace util
     return nwritten;
   }
 
+  static
   int read_atmost_n(int fd, char* buf, size_t read_upto)
   {
     int rbytes = 0;
@@ -133,6 +138,7 @@ namespace util
     return rbytes;
   }
 
+  static
   int wait_for_child_exit(int pid)
   {
     int status;
@@ -152,9 +158,20 @@ namespace util
 
 
 // Popen Arguments
-struct bufsiz      { int  bufsiz = 0; };
-struct defer_spawn { bool defer  = false; };
-struct close_fds   { bool close_all = false; };
+struct bufsize { 
+  bufsize(int siz): bufsiz(siz) {}
+  int  bufsiz = 0;
+};
+
+struct defer_spawn { 
+  defer_spawn(bool d): defer(d) {}
+  bool defer  = false;
+};
+
+struct close_fds { 
+  close_fds(bool c): close_all(c) {}
+  bool close_all = false;
+};
 
 struct string_arg
 {
@@ -192,6 +209,7 @@ enum IOTYPE {
   PIPE,
 };
 
+
 struct input
 {
   input(int fd): rd_ch_(fd) {}
@@ -228,7 +246,8 @@ struct output
   int wr_ch_ = -1;
 };
 
-struct error {
+struct error
+{
   error(int fd): wr_ch_(fd) {}
 
   error(const char* filename) {
@@ -256,39 +275,36 @@ struct ArgumentDeducer
 {
   ArgumentDeducer(Popen* p): popen_(p) {}
 
-  template <typename T>
-  void set_options(T&& arg)
-  {
-    set_option(std::forward<T>(arg));
-  }
-
-  template <typename T, typename... Args>
-  void set_options(T&& farg, Args&&... rem_args)
-  {
-    set_option(std::forward<T>(farg));
-    set_options(std::forward<Args>(rem_args)...);
-  }
-
   void set_option(executable&& exe);
-
   void set_option(cwd&& cwdir);
-
-  void set_option(bufsiz&& bsiz);
-
+  void set_option(bufsize&& bsiz);
   void set_option(environment&& env);
-
   void set_option(defer_spawn&& defer);
-
   void set_option(input&& inp);
-
   void set_option(output&& out);
-
   void set_option(error&& err);
-
   void set_option(close_fds&& cfds);
 
 private:
   Popen* popen_ = nullptr;
+};
+
+
+class Child
+{
+public:
+  Child(Popen* p, int err_wr_pipe):
+    parent_(p),
+    err_wr_pipe_(err_wr_pipe)
+  {}
+
+  void execute_child();
+
+private:
+  // Lets call it parent even though 
+  // technically a bit incorrect
+  Popen* parent_ = nullptr;
+  int err_wr_pipe_ = -1;
 };
 
 }; // end namespace detail
@@ -298,6 +314,7 @@ class Popen
 {
 public:
   friend class detail::ArgumentDeducer;
+  friend class detail::Child;
 
   template <typename... Args>
   Popen(const std::string& cmd_args, Args&& ...args): 
@@ -306,14 +323,7 @@ public:
     vargs_ = util::split(cmd_args);
     init_args(std::forward<Args>(args)...);
 
-    try {
-      if (!defer_process_start_) execute_process();
-    } catch (const std::exception& e) {
-      cleanup_fds();
-      throw e;
-    }
-
-    setup_comm_channels();
+    if (!defer_process_start_) execute_process();
   }
 
   template <typename... Args>
@@ -322,14 +332,7 @@ public:
     vargs_.insert(vargs_.end(), cmd_args.begin(), cmd_args.end());
     init_args(std::forward<Args>(args)...);
 
-    try {
-      if (!defer_process_start_) execute_process();
-    } catch (const std::exception& e) {
-      cleanup_fds();
-      throw e;
-    }
-
-    setup_comm_channels();
+    if (!defer_process_start_) execute_process();
   }
 
   void start_process() throw (CalledProcessError, OSError)
@@ -343,23 +346,17 @@ public:
       assert (0); 
       return;
     }
-    try {
-      execute_process();
-    } catch (const std::exception& e) {
-      cleanup_fds();
-      throw e;
-    }
-
-    setup_comm_channels();
+    execute_process();
   }
 
-  FILE* input()  { return input_;  }
-  FILE* output() { return output_; }
-  FILE* error()  { return error_;  }
+  FILE* input()  { return input_.get();  }
+  FILE* output() { return output_.get(); }
+  FILE* error()  { return error_.get();  }
 
 private:
-  template <typename... Args>
-  void init_args(Args&&... args);
+  template <typename F, typename... Args>
+  void init_args(F&& farg, Args&&... args);
+  void init_args();
   void populate_c_argv();
   void execute_process() throw (CalledProcessError, OSError);
   void cleanup_fds();
@@ -373,9 +370,9 @@ private:
   std::string cwd_;
   std::map<std::string, std::string> env_;
 
-  FILE* input_  = nullptr;
-  FILE* output_ = nullptr;
-  FILE* error_  = nullptr;
+  std::shared_ptr<FILE> input_  = nullptr;
+  std::shared_ptr<FILE> output_ = nullptr;
+  std::shared_ptr<FILE> error_  = nullptr;
 
   // Pipes for communicating with child
 
@@ -401,16 +398,16 @@ private:
   int child_pid_ = -1;
 };
 
-template <>
 void Popen::init_args() {
   populate_c_argv();
 }
 
-template <typename... Args>
-void Popen::init_args(Args&&... args)
+template <typename F, typename... Args>
+void Popen::init_args(F&& farg, Args&&... args)
 {
   detail::ArgumentDeducer argd(this);
-  argd.set_options(std::forward<Args>(args)...);
+  argd.set_option(std::forward<F>(farg));
+  init_args(std::forward<Args>(args)...);
 }
 
 void Popen::populate_c_argv()
@@ -423,51 +420,43 @@ void Popen::cleanup_fds()
 {
   if (write_to_child_ != -1 && read_from_parent_ != -1) {
     close(write_to_child_);
-    close(read_from_parent_);
   }
 
   if (write_to_parent_ != -1 && read_from_child_ != -1) {
-    close(write_to_parent_);
     close(read_from_child_);
   }
 
   if (err_write_ != -1 && err_read_ != -1) {
-    close(err_write_);
     close(err_read_);
   }
 }
 
 void Popen::setup_comm_channels()
 {
-  if (write_to_child_ != -1) {
-    input_ = fdopen(write_to_child_, "wb");
-  }
-  if (write_to_parent_ != -1) {
-    output_ = fdopen(write_to_parent_, "rb");
-  }
-  if (err_read_ != -1) {
-    error_ = fdopen(err_read_, "rb");
-  }
+  if (write_to_child_ != -1)  input_.reset(fdopen(write_to_child_, "wb"), fclose);
+  if (read_from_child_ != -1) output_.reset(fdopen(read_from_child_, "rb"), fclose);
+  if (err_read_ != -1)        error_.reset(fdopen(err_read_, "rb"), fclose);
 
-  auto handles = {input_, output_, error_};
+  auto handles = {input_.get(), output_.get(), error_.get()};
+
   for (auto& h : handles) {
-    //TODO: error checking
     if (h == nullptr) continue;
-    if (bufsiz_ == 0)
+    switch (bufsiz_) {
+    case 0:
       setvbuf(h, nullptr, _IONBF, BUFSIZ);
-    else if (bufsiz_ == 1)
+      break;
+    case 1:
       setvbuf(h, nullptr, _IONBF, BUFSIZ);
-    else
+      break;
+    default:
       setvbuf(h, nullptr, _IOFBF, bufsiz_);
+    };
   }
 }
-
 
 void Popen::execute_process() throw (CalledProcessError, OSError)
 {
   int err_rd_pipe, err_wr_pipe;
-  int sys_ret = -1;
-
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
 
   if (!exe_name_.length()) {
@@ -477,111 +466,57 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
   child_pid_ = fork();
 
   if (child_pid_ < 0) {
-    close (err_rd_pipe);
-    close (err_wr_pipe);
+    close(err_rd_pipe);
+    close(err_wr_pipe);
     throw OSError("fork failed", errno);
   }
 
-  if (child_pid_ == 0) {/* Child Part of Code */
-    try {
-      // Close descriptors belonging to parent
-      if (write_to_child_ != -1) close(write_to_child_);
-      if (read_from_child_ != -1) close(read_from_child_);
-      if (err_read_ != -1) close(err_read_);
-      close(err_rd_pipe);
-
-      // Make the child owned descriptors as the
-      // stdin, stdout and stderr for the child process
-      auto _dup2_ = [](int fd, int to_fd) {
-	if (fd == to_fd) {
-	  // dup2 syscall does not reset the 
-	  // CLOEXEC flag if the descriptors
-	  // provided to it are same.
-	  // But, we need to reset the CLOEXEC
-	  // flag as the provided descriptors
-	  // are now going to be the standard 
-	  // input, output and error
-	  util::set_clo_on_exec(fd, false);
-	} else if(fd != -1) {
-	  int res = dup2(fd, to_fd);
-	  if (res == -1) throw OSError("dup2 failed", errno);
-	}
-      };
-
-      // Create the standard streams
-      _dup2_(read_from_parent_, 0); // Input stream
-      _dup2_(write_to_parent_,  1); // Output stream
-      _dup2_(err_write_,        2); // Error stream
-
-      // Close the extra sockets
-      if (read_from_parent_ != -1 && read_from_parent_ > 2) close(read_from_parent_);
-      if (write_to_parent_ != -1 && write_to_parent_ > 2) close(write_to_parent_);
-      if (err_write_ != -1 && err_write_ > 2) close(err_write_);
-
-      // Close all the inherited fd's except the error write pipe
-      if (close_fds_) {
-	int max_fd = sysconf(_SC_OPEN_MAX);
-
-	if (max_fd == -1) throw OSError("sysconf failed", errno);
-
-	for (int i = 3; i < max_fd; i++) {
-	  if (i == err_wr_pipe) continue;
-	  close(i);
-	}
-      }
-
-      // Change the working directory if provided
-      if (cwd_.length()) {
-	sys_ret = chdir(cwd_.c_str());
-	if (sys_ret == -1) throw OSError("chdir failed", errno);
-      }
-
-      // Replace the current image with the executable
-      if (env_.size()) {
-	for (auto& kv : env_) setenv(kv.first.c_str(), kv.second.c_str(), 1);
-	sys_ret = execvp(exe_name_.c_str(), cargv_.data());
-      } else {
-	sys_ret = execvp(exe_name_.c_str(), cargv_.data());
-      }
-      if (sys_ret == -1) throw OSError("execve failed", errno);
-
-    } catch (const OSError& exp) {
-      // Just write the exception message
-      // TODO: Give back stack trace ?
-      std::string err_msg(exp.what());
-      //ATTN: Can we do something on error here ?
-      util::write_n(err_wr_pipe, err_msg.c_str(), err_msg.length());
-      close(err_wr_pipe);
-    }
-
-    // Calling application would not get this
-    // exit failure
-    exit (EXIT_FAILURE);
-  } else { // Parent code
-    // Close the err_wr_pipe
-    // Else get stuck forever!!
-    close (err_wr_pipe);
-    // Read the error from child if at all
-    char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
-    int read_bytes = util::read_atmost_n(err_rd_pipe, err_buf, SP_MAX_ERR_BUF_SIZ);
-
+  if (child_pid_ == 0)
+  {
+    // Close descriptors belonging to parent
+    if (write_to_child_ != -1)  close(write_to_child_);
+    if (read_from_child_ != -1) close(read_from_child_);
+    if (err_read_ != -1)        close(err_read_);
+    //Close the read end of the error pipe
     close(err_rd_pipe);
 
-    if (read_bytes || strlen(err_buf)) {
-      // Call waitpid to reap the child process
-      // waitpid suspends the calling process until the 
-      // child terminates.
-      sys_ret = util::wait_for_child_exit(child_pid_);
-      // If the child could not be reaped successfully
-      // raise that error instead of child error
-      if (sys_ret == -1) throw OSError("child exit", errno);
+    detail::Child chld(this, err_wr_pipe);
+    chld.execute_child();
+  } 
+  else 
+  {
+    int sys_ret = -1;
+    close (err_wr_pipe);// close child side of pipe, else get stuck in read below
 
-      // Throw whatever information we have about child failure
-      throw CalledProcessError(err_buf);
+    // Close child pipes
+    if (write_to_parent_ != -1)  close(write_to_parent_);
+    if (read_from_parent_ != -1) close(read_from_parent_);
+    if (err_write_ != -1)        close(err_write_);
+
+    try {
+      char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
+      int read_bytes = util::read_atmost_n(err_rd_pipe, err_buf, SP_MAX_ERR_BUF_SIZ);
+      close(err_rd_pipe);
+
+      if (read_bytes || strlen(err_buf)) {
+	// Call waitpid to reap the child process
+	// waitpid suspends the calling process until the
+	// child terminates.
+	sys_ret = util::wait_for_child_exit(child_pid_);
+	if (sys_ret == -1) throw OSError("child exit", errno);
+
+	// Throw whatever information we have about child failure
+	throw CalledProcessError(err_buf);
+      }
+    } catch (std::exception& exp) {
+      cleanup_fds();
+      throw exp;
     }
+
+    // Setup the communication channels of the Popen class
+    setup_comm_channels();
   }
 }
-
 
 namespace detail {
 
@@ -593,7 +528,7 @@ namespace detail {
     popen_->cwd_ = std::move(cwdir.arg_value);
   }
 
-  void ArgumentDeducer::set_option(bufsiz&& bsiz) {
+  void ArgumentDeducer::set_option(bufsize&& bsiz) {
     popen_->bufsiz_ = bsiz.bufsiz;
   }
 
@@ -622,6 +557,91 @@ namespace detail {
 
   void ArgumentDeducer::set_option(close_fds&& cfds) {
     popen_->close_fds_ = cfds.close_all;
+  }
+
+
+  void Child::execute_child() {
+    int sys_ret = -1;
+    try {
+      if (parent_->write_to_parent_ == 0)
+      	parent_->write_to_parent_ = dup(parent_->write_to_parent_);
+      if (parent_->err_write_ == 0 || parent_->err_write_ == 1)
+      	parent_->err_write_ = dup(parent_->err_write_);
+
+      // Make the child owned descriptors as the
+      // stdin, stdout and stderr for the child process
+      auto _dup2_ = [](int fd, int to_fd) {
+        if (fd == to_fd) {
+          // dup2 syscall does not reset the
+          // CLOEXEC flag if the descriptors
+          // provided to it are same.
+          // But, we need to reset the CLOEXEC
+          // flag as the provided descriptors
+          // are now going to be the standard
+          // input, output and error
+          util::set_clo_on_exec(fd, false);
+        } else if(fd != -1) {
+          int res = dup2(fd, to_fd);
+          if (res == -1) throw OSError("dup2 failed", errno);
+        }
+      };
+
+      // Create the standard streams
+      _dup2_(parent_->read_from_parent_, 0); // Input stream
+      _dup2_(parent_->write_to_parent_,  1); // Output stream
+      _dup2_(parent_->err_write_,        2); // Error stream
+
+      // Close the duped descriptors
+      if (parent_->read_from_parent_ != -1 && parent_->read_from_parent_ > 2) 
+      	close(parent_->read_from_parent_);
+
+      if (parent_->write_to_parent_ != -1 && parent_->write_to_parent_ > 2) 
+      	close(parent_->write_to_parent_);
+
+      if (parent_->err_write_ != -1 && parent_->err_write_ > 2) 
+      	close(parent_->err_write_);
+
+      // Close all the inherited fd's except the error write pipe
+      if (parent_->close_fds_) {
+        int max_fd = sysconf(_SC_OPEN_MAX);
+        if (max_fd == -1) throw OSError("sysconf failed", errno);
+
+        for (int i = 3; i < max_fd; i++) {
+          if (i == err_wr_pipe_) continue;
+          close(i);
+        }
+      }
+
+      // Change the working directory if provided
+      if (parent_->cwd_.length()) {
+        sys_ret = chdir(parent_->cwd_.c_str());
+        if (sys_ret == -1) throw OSError("chdir failed", errno);
+      }
+
+      // Replace the current image with the executable
+      if (parent_->env_.size()) {
+        for (auto& kv : parent_->env_) {
+          setenv(kv.first.c_str(), kv.second.c_str(), 1);
+	}
+        sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
+      } else {
+        sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
+      }
+
+      if (sys_ret == -1) throw OSError("execve failed", errno);
+
+    } catch (const OSError& exp) {
+      // Just write the exception message
+      // TODO: Give back stack trace ?
+      std::string err_msg(exp.what());
+      //ATTN: Can we do something on error here ?
+      util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
+    }
+
+    // Calling application would not get this
+    // exit failure
+    exit (EXIT_FAILURE);
+
   }
 
 
