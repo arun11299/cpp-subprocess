@@ -20,6 +20,7 @@ extern "C" {
 
 namespace subprocess {
 
+using Buffer    = std::vector<uint8_t>;
 using OutBuffer = std::vector<uint8_t>;
 using ErrBuffer = std::vector<uint8_t>;
 
@@ -310,10 +311,27 @@ private:
   int err_wr_pipe_ = -1;
 };
 
+class Streams;
+
+class Communication
+{
+public:
+  Communication(Streams* stream): stream_(stream)
+  {}
+  void operator=(const Communication&) = delete;
+public:
+  int send(const uint8_t* msg, size_t length);
+  int send(const Buffer& msg);
+  int send(Buffer&& msg);
+
+private:
+  Streams* stream_;
+};
+
 class Streams
 {
 public:
-  Streams() {}
+  Streams():comm_(this) {}
   void operator=(const Streams&) = delete;
 
 public:
@@ -346,7 +364,26 @@ public:
     if (err_write_ != -1)        close(err_write_);
   }
 
+  FILE* input()  { return input_.get(); }
+  FILE* output() { return output_.get(); }
+  FILE* error()  { return error_.get(); }
+
+  void input(FILE* fp)  { input_.reset(fp, fclose); }
+  void output(FILE* fp) { output_.reset(fp, fclose); }
+  void error(FILE* fp)  { error_.reset(fp, fclose); }
+
+public: /* Communication forwarding API's */
+  int send(const uint8_t* msg, size_t length)
+  { return comm_.send(msg, length); }
+
+  int send(const Buffer& msg)
+  { return comm_.send(msg); }
+
+  int send(Buffer&& msg)
+  { return comm_.send(std::move(msg)); }
+
 public:// Yes they are public
+
   std::shared_ptr<FILE> input_  = nullptr;
   std::shared_ptr<FILE> output_ = nullptr;
   std::shared_ptr<FILE> error_  = nullptr;
@@ -367,6 +404,9 @@ public:// Yes they are public
   // Emulates stderr
   int err_write_ = -1; // Write error to parent (Child owned)
   int err_read_  = -1; // Read error from child (Parent owned)
+
+private:
+  Communication comm_;
 };
 
 }; // end namespace detail
@@ -401,15 +441,22 @@ public:
 
   int pid() const noexcept { return child_pid_; }
 
-  void communicate(bool finish = false);
-
   void set_out_buf_cap();
 
   void set_err_buf_cap();
 
-  OutBuffer& out_buf();
+  int send(const uint8_t* msg, size_t length) 
+  { return stream_.send(msg, length); }
 
-  ErrBuffer& err_buf();
+  int send(const Buffer& msg)
+  { return stream_.send(msg); }
+
+  int send(Buffer&& msg)
+  { return stream_.send(std::move(msg)); }
+
+  void communicate(const char* msg, size_t length, bool finish = false);
+  void communicate(const Buffer& msg, bool finish = false);
+  void communicate(Buffer&& msg, bool finish = false);
 
 private:
   template <typename F, typename... Args>
@@ -661,11 +708,11 @@ namespace detail {
 
   void Streams::setup_comm_channels()
   {
-    if (write_to_child_ != -1)  input_.reset(fdopen(write_to_child_, "wb"), fclose);
-    if (read_from_child_ != -1) output_.reset(fdopen(read_from_child_, "rb"), fclose);
-    if (err_read_ != -1)        error_.reset(fdopen(err_read_, "rb"), fclose);
+    if (write_to_child_ != -1)  input(fdopen(write_to_child_, "wb"));
+    if (read_from_child_ != -1) output(fdopen(read_from_child_, "rb"));
+    if (err_read_ != -1)        error(fdopen(err_read_, "rb"));
 
-    auto handles = {input_.get(), output_.get(), error_.get()};
+    auto handles = {input(), output(), error()};
 
     for (auto& h : handles) {
       if (h == nullptr) continue;
@@ -682,8 +729,22 @@ namespace detail {
     }
   }
 
+  int Communication::send(const uint8_t* msg, size_t length)
+  {
+    if (stream_->input() == nullptr) return -1;
+    return std::fwrite(msg, sizeof(uint8_t), length, stream_->input());
+  }
+
+  int Communication::send(const Buffer& msg)
+  {
+    return send(msg.data(), msg.size());
+  }
+
+  int Communication::send(Buffer&& msg)
+  {
+    return send(msg.data(), msg.size());
+  }
 
 }; // end namespace detail
-
 
 };
