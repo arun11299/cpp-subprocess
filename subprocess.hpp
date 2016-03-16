@@ -21,10 +21,6 @@ extern "C" {
 
 namespace subprocess {
 
-using Buffer    = std::vector<char>;
-using OutBuffer = std::vector<char>;
-using ErrBuffer = std::vector<char>;
-
 // Max buffer size allocated on stack for read error
 // from pipe
 static const size_t SP_MAX_ERR_BUF_SIZ = 1024;
@@ -271,6 +267,22 @@ struct error
 };
 
 // ~~~~ End Popen Args ~~~~
+//
+
+
+class Buffer
+{
+public:
+  Buffer() {}
+  Buffer(size_t cap) { buf.resize(cap); }
+  void add_cap(size_t cap) { buf.resize(cap); }
+public:
+  std::vector<char> buf;
+  size_t length = 0;
+};
+
+using OutBuffer = Buffer;
+using ErrBuffer = Buffer;
 
 // Fwd Decl.
 class Popen;
@@ -323,10 +335,10 @@ public:
   void operator=(const Communication&) = delete;
 public:
   int send(const char* msg, size_t length);
-  int send(const Buffer& msg);
+  int send(const std::vector<char>& msg);
 
   std::pair<OutBuffer, ErrBuffer> communicate(const char* msg, size_t length);
-  std::pair<OutBuffer, ErrBuffer> communicate(const Buffer& msg)
+  std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   { return communicate(msg.data(), msg.size()); }
 
   void set_out_buf_cap(size_t cap) { out_buf_cap_ = cap; }
@@ -393,13 +405,13 @@ public: /* Communication forwarding API's */
   int send(const char* msg, size_t length)
   { return comm_.send(msg, length); }
 
-  int send(const Buffer& msg)
+  int send(const std::vector<char>& msg)
   { return comm_.send(msg); }
 
   std::pair<OutBuffer, ErrBuffer> communicate(const char* msg, size_t length)
   { return comm_.communicate(msg, length); }
 
-  std::pair<OutBuffer, ErrBuffer> communicate(const Buffer& msg)
+  std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   { return comm_.communicate(msg); }
 
 
@@ -469,13 +481,13 @@ public:
   int send(const char* msg, size_t length) 
   { return stream_.send(msg, length); }
 
-  int send(const Buffer& msg)
+  int send(const std::vector<char>& msg)
   { return stream_.send(msg); }
 
   std::pair<OutBuffer, ErrBuffer> communicate(const char* msg, size_t length)
   { return stream_.communicate(msg, length); }
 
-  std::pair<OutBuffer, ErrBuffer> communicate(const Buffer& msg)
+  std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   { return stream_.communicate(msg); }
 
 private:
@@ -574,7 +586,11 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
 
     try {
       char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
-      int read_bytes = util::read_atmost_n(err_rd_pipe, err_buf, SP_MAX_ERR_BUF_SIZ);
+
+      int read_bytes = util::read_atmost_n(
+				  err_rd_pipe, 
+				  err_buf, 
+				  SP_MAX_ERR_BUF_SIZ);
       close(err_rd_pipe);
 
       if (read_bytes || strlen(err_buf)) {
@@ -755,7 +771,7 @@ namespace detail {
     return std::fwrite(msg, sizeof(char), length, stream_->input());
   }
 
-  int Communication::send(const Buffer& msg)
+  int Communication::send(const std::vector<char>& msg)
   {
     return send(msg.data(), msg.size());
   }
@@ -787,9 +803,13 @@ namespace detail {
       	// Read till EOF
       	// ATTN: This could be blocking, if the process
       	// at the other end screws up, we get screwed up as well
-      	obuf.resize(out_buf_cap_);
-	int rbytes = util::read_atmost_n(fileno(stream_->output()),
-	    (char*)obuf.data(), obuf.size());
+      	obuf.add_cap(out_buf_cap_);
+
+	int rbytes = util::read_atmost_n(
+				  fileno(stream_->output()),
+				  obuf.buf.data(), 
+				  obuf.buf.size());
+
 	if (rbytes == -1) {
 	  throw OSError("read to obuf failed", errno);
 	}
@@ -797,9 +817,13 @@ namespace detail {
 	stream_->output_.reset();
       } else if (stream_->error()) {
       	// Same screwness applies here as well
-      	ebuf.resize(err_buf_cap_);
-      	int rbytes = util::read_atmost_n(fileno(stream_->error()),
-      	    (char*)ebuf.data(), ebuf.size());
+      	ebuf.add_cap(err_buf_cap_);
+
+      	int rbytes = util::read_atmost_n(
+				  fileno(stream_->error()),
+				  ebuf.buf.data(), 
+				  ebuf.buf.size());
+
       	if (rbytes == -1) {
       	  throw OSError("read to ebuf failed", errno);
 	}
@@ -822,16 +846,26 @@ namespace detail {
     std::vector<std::thread> bg_threads;
 
     if (stream_->output()) {
-      obuf.resize(out_buf_cap_);
-      bg_threads.push_back(std::thread(
-      	    util::read_atmost_n, fileno(stream_->output()),
-      	    (char*)obuf.data(), obuf.size()));
+      obuf.add_cap(out_buf_cap_);
+
+      bg_threads.push_back(
+      	  std::thread(
+		  util::read_atmost_n, 
+		  fileno(stream_->output()),
+		  obuf.buf.data(), 
+		  obuf.buf.size())
+      	);
     }
     if (stream_->error()) {
-      ebuf.resize(err_buf_cap_);
-      bg_threads.push_back(std::thread(
-      	  util::read_atmost_n, fileno(stream_->error()),
-      	  (char*)ebuf.data(), ebuf.size()));
+      ebuf.add_cap(err_buf_cap_);
+
+      bg_threads.push_back(
+      	  std::thread(
+		  util::read_atmost_n, 
+		  fileno(stream_->error()),
+		  ebuf.buf.data(), 
+		  ebuf.buf.size())
+	);
     }
     if (stream_->input()) {
       if (msg) {

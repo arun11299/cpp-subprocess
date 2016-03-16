@@ -9,7 +9,7 @@ void test_input()
   const char* msg = "one\ntwo\nthree\nfour\nfive\n";
   p.send(msg, strlen(msg));
   auto res = p.communicate(nullptr, 0);
-  std::cout << res.first.data() << std::endl;
+  std::cout << res.first.buf.data() << std::endl;
 }
 
 int main() {
