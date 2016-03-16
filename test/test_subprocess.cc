@@ -6,12 +6,10 @@ using namespace subprocess;
 void test_input()
 {
   auto p = Popen({"grep", "f"}, output{PIPE}, input{PIPE});
-  const char* msg = "one\ntwo\nfour\n";
-  std::fwrite(msg, 1, strlen(msg), p.input());
-  fclose (p.input());
-
-  std::vector<uint8_t> rbuf(128);
-  std::fread(rbuf.data(), 1, 128, p.output());
+  const char* msg = "one\two\three\four\five\n";
+  p.send(msg, strlen(msg));
+  auto res = p.communicate(nullptr, 0);
+  std::cout << res.first.data() << std::endl;
 }
 
 int main() {
