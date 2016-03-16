@@ -476,7 +476,11 @@ public:
 
   int pid() const noexcept { return child_pid_; }
 
+  int retcode() const noexcept { return retcode_; }
+
   bool wait() throw(OSError);
+
+  int poll() throw(OSError);
 
   void set_out_buf_cap(size_t cap) { stream_.set_out_buf_cap(cap); }
 
@@ -524,8 +528,11 @@ private:
   std::vector<std::string> vargs_;
   std::vector<char*> cargv_;
 
+  bool child_created_ = false;
   // Pid of the child process
   int child_pid_ = -1;
+
+  int retcode_ = -1;
 };
 
 void Popen::init_args() {
@@ -573,6 +580,39 @@ bool Popen::wait() throw (OSError)
   return true;
 }
 
+int Popen::poll() throw (OSError)
+{
+  int status;
+  if (!child_created_) return 0; // TODO: ??
+
+  int ret = waitpid(child_pid_, &status, WNOHANG);
+
+  if (ret == child_pid_) {
+    if (WIFSIGNALED(status)) {
+      retcode_ = WTERMSIG(status);
+    } else if (WIFEXITED(status)) {
+      retcode_ = WEXITSTATUS(status);
+    } else {
+      retcode_ = 255;
+    }
+    return retcode_;
+  }
+
+  if (ret == -1) {
+    // From subprocess.py
+    // This happens if SIGCHLD is set to be ignored
+    // or waiting for child process has otherwise been disabled
+    // for our process. This child is dead, we cannot get the
+    // status.
+    if (errno == ECHILD) retcode_ = 0;
+    else throw OSError("waitpid failed", errno);
+  }
+
+  retcode_ = ret;
+
+  return retcode_;
+}
+
 
 void Popen::execute_process() throw (CalledProcessError, OSError)
 {
@@ -590,6 +630,8 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
     close(err_wr_pipe);
     throw OSError("fork failed", errno);
   }
+
+  child_created_ = true;
 
   if (child_pid_ == 0)
   {
