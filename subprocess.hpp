@@ -207,8 +207,7 @@ struct environment
 };
 
 enum IOTYPE { 
-  STDIN = 0,
-  STDOUT,
+  STDOUT = 1,
   STDERR,
   PIPE,
 };
@@ -224,7 +223,7 @@ struct input
     rd_ch_ = fd;
   }
   input(IOTYPE typ) {
-    assert (typ == PIPE);
+    assert (typ == PIPE && "STDOUT/STDERR not allowed");
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
   }
 
@@ -242,7 +241,7 @@ struct output
     wr_ch_ = fd;
   }
   output(IOTYPE typ) {
-    assert (typ == PIPE);
+    assert (typ == PIPE && "STDOUT/STDERR not allowed");
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
   }
 
@@ -260,10 +259,16 @@ struct error
     wr_ch_ = fd;
   }
   error(IOTYPE typ) {
-    assert (typ == PIPE);
-    std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
+    assert ((typ == PIPE || typ == STDOUT) && "STDERR not aloowed");
+    if (typ == PIPE) {
+      std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
+    } else {
+      // Need to defer it till we have checked all arguments
+      deferred_ = true;
+    }
   }
 
+  bool deferred_ = false;
   int rd_ch_ = -1;
   int wr_ch_ = -1;
 };
@@ -548,6 +553,11 @@ public:
     return res;
   }
 
+  std::pair<OutBuffer, ErrBuffer> communicate()
+  {
+    return communicate(nullptr, 0);
+  }
+
 private:
   template <typename F, typename... Args>
   void init_args(F&& farg, Args&&... args);
@@ -756,6 +766,12 @@ namespace detail {
   }
 
   void ArgumentDeducer::set_option(error&& err) {
+    if (err.deferred_ && popen_->stream_.write_to_parent_) {
+      popen_->stream_.err_write_ = popen_->stream_.write_to_parent_;
+      return;
+    } else {
+      throw "Set output before redirecting error to output";
+    }
     if (err.wr_ch_ != -1) popen_->stream_.err_write_ = err.wr_ch_;
     if (err.rd_ch_ != -1) popen_->stream_.err_read_ = err.rd_ch_;
   }
@@ -844,6 +860,7 @@ namespace detail {
       std::string err_msg(exp.what());
       //ATTN: Can we do something on error here ?
       util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
+      throw exp;
     }
 
     // Calling application would not get this
