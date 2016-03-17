@@ -1017,7 +1017,7 @@ namespace detail
   OutBuffer check_output_impl(F& farg, Args&&... args)
   {
     static_assert(!detail::has_type<output, detail::param_pack<Args...>>::value, "output not allowed in args");
-    auto p = Popen(farg, std::forward<Args>(args)..., output{PIPE});
+    auto p = Popen(std::forward<F>(farg), std::forward<Args>(args)..., output{PIPE});
     auto res = p.communicate(nullptr, 0);
     auto retcode = p.poll();
     if (retcode) {
@@ -1026,12 +1026,24 @@ namespace detail
     return std::move(res.first);
   }
 
+  template<typename F, typename... Args>
+  int call_impl(F& farg, Args&&... args)
+  {
+    return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
+  }
+
 }
 
 template<typename... Args>
-int call(Args&&... args)
+int call(std::initializer_list<const char*> plist, Args&&... args)
 {
-  return Popen(std::forward<Args>(args)...).wait();
+  return (detail::call_impl(plist, std::forward<Args>(args)...));
+}
+
+template<typename... Args>
+int call(const std::string& arg, Args&&... args)
+{
+  return (detail::call_impl(arg, std::forward<Args>(args)...));
 }
 
 template <typename... Args>
