@@ -279,6 +279,22 @@ public:
   Buffer(size_t cap) { buf.resize(cap); }
   void add_cap(size_t cap) { buf.resize(cap); }
 
+#if 0
+  Buffer(const Buffer& other):
+    buf(other.buf),
+    length(other.length)
+  {
+    std::cout << "COPY" << std::endl;
+  }
+
+  Buffer(Buffer&& other):
+    buf(std::move(other.buf)),
+    length(other.length)
+  {
+    std::cout << "MOVE" << std::endl;
+  }
+#endif
+
 public:
   std::vector<char> buf;
   size_t length = 0;
@@ -1007,7 +1023,7 @@ namespace detail
     if (retcode) {
       throw CalledProcessError("Command failed");
     }
-    return (res.first);
+    return std::move(res.first);
   }
 
 }
@@ -1021,13 +1037,13 @@ int call(Args&&... args)
 template <typename... Args>
 OutBuffer check_output(std::initializer_list<const char*> plist, Args&&... args)
 {
-  return detail::check_output_impl(plist, std::forward<Args>(args)...);
+  return (detail::check_output_impl(plist, std::forward<Args>(args)...));
 }
 
 template <typename... Args>
 OutBuffer check_output(const std::string& arg, Args&&... args)
 {
-  return detail::check_output_impl(arg, std::forward<Args>(args)...);
+  return (detail::check_output_impl(arg, std::forward<Args>(args)...));
 }
 
 };
