@@ -746,17 +746,17 @@ namespace detail {
   }
 
   void ArgumentDeducer::set_option(input&& inp) {
-    popen_->stream_.read_from_parent_ = inp.rd_ch_;
+    if (inp.rd_ch_ != -1) popen_->stream_.read_from_parent_ = inp.rd_ch_;
     if (inp.wr_ch_ != -1) popen_->stream_.write_to_child_ = inp.wr_ch_;
   }
 
   void ArgumentDeducer::set_option(output&& out) {
-    popen_->stream_.write_to_parent_ = out.wr_ch_;
+    if (out.wr_ch_ != -1) popen_->stream_.write_to_parent_ = out.wr_ch_;
     if (out.rd_ch_ != -1) popen_->stream_.read_from_child_ = out.rd_ch_;
   }
 
   void ArgumentDeducer::set_option(error&& err) {
-    popen_->stream_.err_write_ = err.wr_ch_;
+    if (err.wr_ch_ != -1) popen_->stream_.err_write_ = err.wr_ch_;
     if (err.rd_ch_ != -1) popen_->stream_.err_read_ = err.rd_ch_;
   }
 
