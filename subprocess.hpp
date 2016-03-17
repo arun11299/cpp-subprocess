@@ -50,6 +50,7 @@ public:
 
 namespace util
 {
+
   static std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
@@ -291,6 +292,31 @@ class Popen;
 
 namespace detail {
 
+// Type trait for searching a type within
+// a variadic parameter pack
+
+template <typename... T> struct param_pack{};
+
+template <typename F, typename T> struct has_type;
+
+template <typename F>
+struct has_type<F, param_pack<>> {
+  static constexpr bool value = false;
+};
+
+template <typename F, typename... T>
+struct has_type<F, param_pack<F, T...>> {
+  static constexpr bool value = true;
+};
+
+template <typename F, typename H, typename... T>
+struct has_type<F, param_pack<H,T...>> {
+  static constexpr bool value =
+    std::is_same<F, typename std::decay<H>::type>::value ? true : has_type<F, param_pack<T...>>::value;
+};
+
+//----
+
 struct ArgumentDeducer
 {
   ArgumentDeducer(Popen* p): popen_(p) {}
@@ -478,7 +504,7 @@ public:
 
   int retcode() const noexcept { return retcode_; }
 
-  bool wait() throw(OSError);
+  int wait() throw(OSError);
 
   int poll() throw(OSError);
 
@@ -567,17 +593,19 @@ void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-bool Popen::wait() throw (OSError)
+int Popen::wait() throw (OSError)
 {
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
   if (ret == -1) {
     if (errno != ECHILD) throw OSError("waitpid failed", errno);
-    return true;
+    return 0;
   }
-  if (!WIFEXITED(status)) return false;
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  if (WIFSIGNALED(status)) return WTERMSIG(status);
+  else return 255;
 
-  return true;
+  return 0;
 }
 
 int Popen::poll() throw (OSError)
@@ -606,9 +634,9 @@ int Popen::poll() throw (OSError)
     // status.
     if (errno == ECHILD) retcode_ = 0;
     else throw OSError("waitpid failed", errno);
+  } else {
+    retcode_ = ret;
   }
-
-  retcode_ = ret;
 
   return retcode_;
 }
@@ -879,8 +907,11 @@ namespace detail {
 	if (rbytes == -1) {
 	  throw OSError("read to obuf failed", errno);
 	}
+
+	obuf.length = rbytes;
 	// Close the output stream
 	stream_->output_.reset();
+
       } else if (stream_->error()) {
       	// Same screwness applies here as well
       	ebuf.add_cap(err_buf_cap_);
@@ -893,6 +924,8 @@ namespace detail {
       	if (rbytes == -1) {
       	  throw OSError("read to ebuf failed", errno);
 	}
+
+	ebuf.length = rbytes;
 	// Close the error stream
 	stream_->error_.reset();
       }
@@ -961,6 +994,40 @@ namespace detail {
 
 // Convenience Functions
 //
+//
+namespace detail
+{
+  template<typename F, typename... Args>
+  OutBuffer check_output_impl(F& farg, Args&&... args)
+  {
+    static_assert(!detail::has_type<output, detail::param_pack<Args...>>::value, "output not allowed in args");
+    auto p = Popen(farg, std::forward<Args>(args)..., output{PIPE});
+    auto res = p.communicate(nullptr, 0);
+    auto retcode = p.poll();
+    if (retcode) {
+      throw CalledProcessError("Command failed");
+    }
+    return (res.first);
+  }
 
+}
+
+template<typename... Args>
+int call(Args&&... args)
+{
+  return Popen(std::forward<Args>(args)...).wait();
+}
+
+template <typename... Args>
+OutBuffer check_output(std::initializer_list<const char*> plist, Args&&... args)
+{
+  return detail::check_output_impl(plist, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+OutBuffer check_output(const std::string& arg, Args&&... args)
+{
+  return detail::check_output_impl(arg, std::forward<Args>(args)...);
+}
 
 };
