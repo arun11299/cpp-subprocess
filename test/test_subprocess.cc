@@ -27,9 +27,16 @@ void test_easy_piping()
   std::cout << res.buf.data() << std::endl;
 }
 
+void test_shell()
+{
+  auto obuf = check_output({"ls", "-l"}, shell{false});
+  std::cout << obuf.buf.data() << std::endl;
+}
+
 int main() {
   test_input();
   test_piping();
   test_easy_piping();
+  test_shell();
   return 0;
 }

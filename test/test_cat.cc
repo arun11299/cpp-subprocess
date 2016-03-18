@@ -23,8 +23,16 @@ void test_cat_file_redirection()
   std::cout << "END_TEST" << std::endl;
 }
 
+void test_buffer_growth()
+{
+  auto obuf = sp::check_output({"cat", "../subprocess.hpp"});
+  std::cout << obuf.length << std::endl;
+  assert (obuf.length > sp::DEFAULT_BUF_CAP_BYTES);
+}
+
 int main() {
   test_cat_pipe_redirection();
   test_cat_file_redirection();
+  test_buffer_growth();
   return 0;
 }

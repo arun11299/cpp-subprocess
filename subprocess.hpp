@@ -18,6 +18,7 @@ extern "C" {
   #include <fcntl.h>
   #include <sys/types.h>
   #include <sys/wait.h>    
+  #include <signal.h>
 }
 
 namespace subprocess {
@@ -205,6 +206,16 @@ struct close_fds {
   bool close_all = false;
 };
 
+struct session_leader {
+  session_leader(bool sl): leader_(sl) {}
+  bool leader_ = false;
+};
+
+struct shell {
+  shell(bool s): shell_(s) {}
+  bool shell_ = false;
+};
+
 struct string_arg
 {
   string_arg(const char* arg): arg_value(arg) {}
@@ -308,6 +319,43 @@ struct error
   int wr_ch_ = -1;
 };
 
+// Impoverished, meager, needy, truly needy
+// version of type erasure to store function pointers
+// needed to provide the functionality of preexec_func
+// ATTN: Can be used only to execute functions with no
+// arguments and returning void.
+// Could have used more efficient methods, ofcourse, but
+// that wont yield me the consistent syntax which I am 
+// aiming for. If you know, then please do let me know.
+
+class preexec_func
+{
+public:
+  preexec_func() {}
+
+  template <typename Func>
+  preexec_func(Func f): holder_(new FuncHolder<Func>(f))
+  {}
+
+  void operator()() {
+    (*holder_)();
+  }
+
+private:
+  struct HolderBase {
+    virtual void operator()() const;
+  };
+  template <typename T>
+  struct FuncHolder: HolderBase {
+    FuncHolder(T func): func_(func) {}
+    void operator()() const override {}
+    // The function pointer/reference
+    T func_;
+  };
+
+  std::unique_ptr<HolderBase> holder_ = nullptr;
+};
+
 // ~~~~ End Popen Args ~~~~
 //
 
@@ -382,10 +430,13 @@ struct ArgumentDeducer
   void set_option(bufsize&& bsiz);
   void set_option(environment&& env);
   void set_option(defer_spawn&& defer);
+  void set_option(shell&& sh);
   void set_option(input&& inp);
   void set_option(output&& out);
   void set_option(error&& err);
   void set_option(close_fds&& cfds);
+  void set_option(preexec_func&& prefunc);
+  void set_option(session_leader&& sleader);
 
 private:
   Popen* popen_ = nullptr;
@@ -570,6 +621,10 @@ public:
 
   int poll() throw(OSError);
 
+  // Does not fail, Caller is expected to recheck the
+  // status with a call to poll()
+  void kill(int sig_num = 9);
+
   void set_out_buf_cap(size_t cap) { stream_.set_out_buf_cap(cap); }
 
   void set_err_buf_cap(size_t cap) { stream_.set_err_buf_cap(cap); }
@@ -615,9 +670,14 @@ private:
 
   bool defer_process_start_ = false;
   bool close_fds_ = false;
+  bool has_preexec_fn_ = false;
+  bool shell_ = false;
+  bool session_leader_ = false;
+
   std::string exe_name_;
   std::string cwd_;
   std::map<std::string, std::string> env_;
+  preexec_func preexec_fn_;
 
   // Command in string format
   std::string args_;
@@ -713,11 +773,21 @@ int Popen::poll() throw (OSError)
   return retcode_;
 }
 
+void Popen::kill(int sig_num)
+{
+  if (session_leader_) killpg(child_pid_, sig_num);
+  else ::kill(child_pid_, sig_num);
+}
+
 
 void Popen::execute_process() throw (CalledProcessError, OSError)
 {
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
+
+  if (shell_) {
+    vargs_.insert(vargs_.begin(), {"/bin/sh", "-c"});
+  }
 
   if (!exe_name_.length()) {
     exe_name_ = vargs_[0];
@@ -799,6 +869,14 @@ namespace detail {
     popen_->defer_process_start_ = defer.defer;
   }
 
+  void ArgumentDeducer::set_option(shell&& sh) {
+    popen_->shell_ = sh.shell_;
+  }
+
+  void ArgumentDeducer::set_option(session_leader&& sleader) {
+    popen_->session_leader_ = sleader.leader_;
+  }
+
   void ArgumentDeducer::set_option(input&& inp) {
     if (inp.rd_ch_ != -1) popen_->stream_.read_from_parent_ = inp.rd_ch_;
     if (inp.wr_ch_ != -1) popen_->stream_.write_to_child_ = inp.wr_ch_;
@@ -822,6 +900,11 @@ namespace detail {
 
   void ArgumentDeducer::set_option(close_fds&& cfds) {
     popen_->close_fds_ = cfds.close_all;
+  }
+
+  void ArgumentDeducer::set_option(preexec_func&& prefunc) {
+    popen_->preexec_fn_ = std::move(prefunc);
+    popen_->has_preexec_fn_ = true;
   }
 
 
@@ -884,6 +967,15 @@ namespace detail {
       if (parent_->cwd_.length()) {
         sys_ret = chdir(parent_->cwd_.c_str());
         if (sys_ret == -1) throw OSError("chdir failed", errno);
+      }
+
+      if (parent_->has_preexec_fn_) {
+      	parent_->preexec_fn_();
+      }
+
+      if (parent_->session_leader_) {
+      	sys_ret = setsid();
+      	if (sys_ret == -1) throw OSError("setsid failed", errno);
       }
 
       // Replace the current image with the executable
@@ -1137,7 +1229,7 @@ OutBuffer check_output(const std::string& arg, Args&&... args)
 // Piping Support
 
 template<typename... Args>
-// Args expected to be std::initializer_list<const char*>
+// Args expected to be flat commands using string instead of initializer_list
 OutBuffer pipeline(Args&&... args)
 {
   std::vector<Popen> pcmds;
