@@ -12,7 +12,17 @@ void test_input()
   std::cout << res.first.buf.data() << std::endl;
 }
 
+void test_piping()
+{
+  auto cat = Popen({"cat", "../subprocess.hpp"}, output{PIPE});
+  auto grep = Popen({"grep", "template"}, input{cat.output()}, output{PIPE});
+  auto cut = Popen({"cut", "-d,", "-f", "1"}, input{grep.output()}, output{PIPE});
+  auto res = cut.communicate().first;
+  std::cout << res.buf.data() << std::endl;
+}
+
 int main() {
   test_input();
+  test_piping();
   return 0;
 }

@@ -142,6 +142,34 @@ namespace util
     return rbytes;
   }
 
+  template <typename Buffer>
+  static int read_all(int fd, Buffer& buf)
+  {
+    size_t orig_size = buf.size();
+    size_t increment = orig_size;
+    auto buffer = buf.data();
+    int total_bytes_read = 0;
+
+    while (1) {
+      int rd_bytes = read_atmost_n(fd, buffer, buf.size());
+      if (rd_bytes == increment) {
+	// Resize the buffer to accomodate more
+	orig_size = orig_size * 1.5;
+	increment = orig_size - buf.size();
+	buf.resize(orig_size);
+	buffer += rd_bytes;
+	total_bytes_read += rd_bytes;
+      } else if (rd_bytes != -1){
+      	total_bytes_read += rd_bytes;
+      	break;
+      } else {
+      	if (total_bytes_read == 0) return -1;
+      	break;
+      }
+    }
+    return total_bytes_read;
+  }
+
   static
   std::pair<int, int> wait_for_child_exit(int pid)
   {
@@ -212,10 +240,13 @@ enum IOTYPE {
   PIPE,
 };
 
+//TODO: A common base/interface for below stream structures ??
 
 struct input
 {
   input(int fd): rd_ch_(fd) {}
+
+  input (FILE* fp):input(fileno(fp)) { assert(fp); }
 
   input(const char* filename) {
     int fd = open(filename, O_RDONLY);
@@ -235,6 +266,8 @@ struct output
 {
   output(int fd): wr_ch_(fd) {}
 
+  output (FILE* fp):output(fileno(fp)) { assert(fp); }
+
   output(const char* filename) {
     int fd = open(filename, O_APPEND | O_CREAT | O_RDWR, 0640);
     if (fd == -1) throw OSError("File not found: ", errno);
@@ -252,6 +285,8 @@ struct output
 struct error
 {
   error(int fd): wr_ch_(fd) {}
+
+  error(FILE* fp):error(fileno(fp)) { assert(fp); }
 
   error(const char* filename) {
     int fd = open(filename, O_APPEND | O_CREAT | O_RDWR, 0640); 
@@ -557,6 +592,10 @@ public:
   {
     return communicate(nullptr, 0);
   }
+
+  FILE* input()  { return stream_.input(); }
+  FILE* output() { return stream_.output();}
+  FILE* error()  { return stream_.error(); }
 
 private:
   template <typename F, typename... Args>
@@ -932,10 +971,9 @@ namespace detail {
       	// at the other end screws up, we get screwed up as well
       	obuf.add_cap(out_buf_cap_);
 
-	int rbytes = util::read_atmost_n(
+	int rbytes = util::read_all(
 				  fileno(stream_->output()),
-				  obuf.buf.data(), 
-				  obuf.buf.size());
+				  obuf.buf);
 
 	if (rbytes == -1) {
 	  throw OSError("read to obuf failed", errno);
@@ -1074,5 +1112,7 @@ OutBuffer check_output(const std::string& arg, Args&&... args)
 {
   return (detail::check_output_impl(arg, std::forward<Args>(args)...));
 }
+
+// Piping Support
 
 };
