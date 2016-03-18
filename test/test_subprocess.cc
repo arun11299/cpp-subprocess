@@ -21,8 +21,15 @@ void test_piping()
   std::cout << res.buf.data() << std::endl;
 }
 
+void test_easy_piping()
+{
+  auto res = pipeline("cat ../subprocess.hpp", "grep Args", "grep template");
+  std::cout << res.buf.data() << std::endl;
+}
+
 int main() {
-  test_input();
-  test_piping();
+  //test_input();
+  //test_piping();
+  test_easy_piping();
   return 0;
 }

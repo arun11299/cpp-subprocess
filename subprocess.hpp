@@ -542,6 +542,9 @@ public:
     vargs_ = util::split(cmd_args);
     init_args(std::forward<Args>(args)...);
 
+    // Setup the communication channels of the Popen class
+    stream_.setup_comm_channels();
+
     if (!defer_process_start_) execute_process();
   }
 
@@ -550,6 +553,9 @@ public:
   {
     vargs_.insert(vargs_.end(), cmd_args.begin(), cmd_args.end());
     init_args(std::forward<Args>(args)...);
+
+    // Setup the communication channels of the Popen class
+    stream_.setup_comm_channels();
 
     if (!defer_process_start_) execute_process();
   }
@@ -640,8 +646,9 @@ void Popen::init_args(F&& farg, Args&&... args)
 
 void Popen::populate_c_argv()
 {
-  cargv_.reserve(vargs_.size());
+  cargv_.reserve(vargs_.size() + 1);
   for (auto& arg : vargs_) cargv_.push_back(&arg[0]);
+  cargv_.push_back(nullptr);
 }
 
 void Popen::start_process() throw (CalledProcessError, OSError)
@@ -767,8 +774,6 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
       throw exp;
     }
 
-    // Setup the communication channels of the Popen class
-    stream_.setup_comm_channels();
   }
 }
 
@@ -1086,6 +1091,22 @@ namespace detail
   {
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
+ 
+  void pipeline_impl(std::vector<Popen>& cmds) { /* EMPTY IMPL */ }
+
+  template<typename... Args>
+  void pipeline_impl(std::vector<Popen>& cmds, 
+                     const std::string& cmd, 
+                     Args&&... args)
+  {
+    if (cmds.size() == 0) {
+      cmds.emplace_back(cmd, output{PIPE}, defer_spawn{true});
+    } else {
+      cmds.emplace_back(cmd, input{cmds.back().output()}, output{PIPE}, defer_spawn{true});
+    }
+
+    pipeline_impl(cmds, std::forward<Args>(args)...);
+  }
 
 }
 
@@ -1114,5 +1135,16 @@ OutBuffer check_output(const std::string& arg, Args&&... args)
 }
 
 // Piping Support
+
+template<typename... Args>
+// Args expected to be std::initializer_list<const char*>
+OutBuffer pipeline(Args&&... args)
+{
+  std::vector<Popen> pcmds;
+  detail::pipeline_impl(pcmds, std::forward<Args>(args)...);
+
+  for (auto& p : pcmds) p.start_process();
+  return (pcmds.back().communicate().first);
+}
 
 };
