@@ -28,8 +28,8 @@ void test_easy_piping()
 }
 
 int main() {
-  //test_input();
-  //test_piping();
+  test_input();
+  test_piping();
   test_easy_piping();
   return 0;
 }
