@@ -5,8 +5,8 @@ using namespace subprocess;
 
 void test_exename()
 {
-  auto obuf = check_output({"-l"}, executable{"ls"}, shell{false});
-  std::cout << obuf.buf.data() << std::endl;
+  auto ret = call({"-l"}, executable{"ls"}, shell{false});
+  std::cout << ret << std::endl;
 }
 
 void test_input()
