@@ -3,6 +3,12 @@
 
 using namespace subprocess;
 
+void test_exename()
+{
+  auto obuf = check_output({"-l"}, executable{"ls"}, shell{false});
+  std::cout << obuf.buf.data() << std::endl;
+}
+
 void test_input()
 {
   auto p = Popen({"grep", "f"}, output{PIPE}, input{PIPE});
@@ -34,6 +40,7 @@ void test_shell()
 }
 
 int main() {
+  test_exename();
   test_input();
   test_piping();
   test_easy_piping();

@@ -1,3 +1,39 @@
+/*!
+
+Documentation for C++ subprocessing libraray.
+
+@copyright The code is licensed under the [MIT
+  License](http://opensource.org/licenses/MIT):
+  <br>
+  Copyright &copy; 2016-2018 Arun Muralidharan.
+  <br>
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+  <br>
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+  <br>
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+@author [Arun Muralidharan]
+@see https://github.com/arun11299/cpp-subprocess to download the source code
+
+@version 1.0.0
+*/
+
+#ifndef __SUBPROCESS_HPP_
+#define __SUBPROCESS_HPP_
+
 #include <map>
 #include <algorithm>
 #include <iostream>
@@ -21,14 +57,53 @@ extern "C" {
   #include <signal.h>
 }
 
+/*!
+ * Getting started with reading this source code.
+ * The source is mainly divided into four parts:
+ * 1. Exception Classes:
+ *    These are very basic exception classes derived from
+ *    runtime_error exception.
+ *    There are two types of exception thrown from subprocess
+ *    library: OSError and CalledProcessError
+ *
+ * 2. Popen Class
+ *    This is the main class the users will deal with. It 
+ *    provides with all the API's to deal with processes.
+ *
+ * 3. Util namespace
+ *    It includes some helper functions to split/join a string,
+ *    reading from file descriptors, waiting on a process, fcntl
+ *    options on file descriptors etc.
+ *
+ * 4. Detail namespace
+ *    This includes some metaprogramming and helper classes.
+ */
+
+
 namespace subprocess {
 
 // Max buffer size allocated on stack for read error
 // from pipe
 static const size_t SP_MAX_ERR_BUF_SIZ = 1024;
+
+// Default buffer capcity for OutBuffer and ErrBuffer.
+// If the data exceeds this capacity, the buffer size is grown
+// by 1.5 times its previous capacity
 static const size_t DEFAULT_BUF_CAP_BYTES = 8192; 
 
-// Exception Classes
+
+/*-----------------------------------------------
+ *    EXCEPTION CLASSES 
+ *-----------------------------------------------
+ */
+
+/*!
+ * class: CalledProcessError
+ * Thrown when there was error executing the command.
+ * Check Popen class API's to know when this exception
+ * can be thrown.
+ *
+ */
 class CalledProcessError: public std::runtime_error
 {
 public:
@@ -38,7 +113,16 @@ public:
 };
 
 
-
+/*!
+ * class: OSError
+ * Thrown when some system call fails to execute or give result.
+ * The exception message contains the name of the failed system call
+ * with the stringisized errno code.
+ * Check Popen class API's to know when this exception would be
+ * thrown.
+ * Its usual that the API exception specification would have
+ * this exception together with CalledProcessError.
+ */
 class OSError: public std::runtime_error
 {
 public:
@@ -52,6 +136,15 @@ public:
 namespace util
 {
 
+  /*!
+   * Function: split
+   * Parameters:
+   * [in] str : Input string which needs to be split based upon the 
+   *		delimiters provided.
+   * [in] deleims : Delimiter characters based upon which the string needs
+   *		    to be split. Default constructed to ' '(space) and '\t'(tab)
+   * [out] vector<string> : Vector of strings split at deleimiter.
+   */
   static std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
@@ -72,6 +165,17 @@ namespace util
     return res;
   }
 
+
+  /*!
+   * Function: join
+   * Parameters:
+   * [in] vec : Vector of strings which needs to be joined to form
+   *		a single string with words seperated by
+   *		a seperator char.
+   *  [in] sep : String used to seperate 2 words in the joined string.
+   *		 Default constructed to ' ' (space).
+   *  [out] string: Joined string.
+   */
   static
   std::string join(const std::vector<std::string>& vec,
 		   const std::string& sep = " ")
@@ -82,6 +186,16 @@ namespace util
     return res;
   }
 
+
+  /*!
+   * Function: set_clo_on_exec
+   * Sets/Resets the FD_CLOEXEC flag on the provided file descriptor
+   * based upon the `set` parameter.
+   * Parameters:
+   * [in] fd : The descriptor on which FD_CLOEXEC needs to be set/reset.
+   * [in] set : If 'true', set FD_CLOEXEC.
+   *	        If 'false' unset FD_CLOEXEC.
+   */
   static
   void set_clo_on_exec(int fd, bool set = true)
   {
@@ -92,8 +206,18 @@ namespace util
     fcntl(fd, F_SETFD, flags);
   }
 
+
+  /*!
+   * Function: pipe_cloexec
+   * Creates a pipe and sets FD_CLOEXEC flag on both
+   * read and write descriptors of the pipe.
+   * Parameters:
+   * [out] : A pair of file descriptors.
+   *	     First element of pair is the read descriptor of pipe.
+   *	     Second element is the write descriptor of pipe.
+   */
   static
-  std::pair<int, int> pipe_cloexec()
+  std::pair<int, int> pipe_cloexec() throw (OSError)
   {
     int pipe_fds[2];
     int res = pipe(pipe_fds);
@@ -108,6 +232,17 @@ namespace util
   }
 
 
+  /*!
+   * Function: write_n
+   * Writes `length` bytes to the file descriptor `fd`
+   * from the buffer `buf`.
+   * Parameters:
+   * [in] fd : The file descriptotr to write to.
+   * [in] buf: Buffer from which data needs to be written to fd.
+   * [in] length: The number of bytes that needs to be written from
+   *		  `buf` to `fd`.
+   * [out] int : Number of bytes written or -1 in case of failure.
+   */
   static
   int write_n(int fd, const char* buf, size_t length)
   {
@@ -120,6 +255,21 @@ namespace util
     return nwritten;
   }
 
+
+  /*!
+   * Function: read_atmost_n
+   * Reads at the most `read_upto` bytes from the 
+   * file descriptor `fd` before returning.
+   * Parameters:
+   * [in] fd : The file descriptor from which it needs to read.
+   * [in] buf : The buffer into which it needs to write the data.
+   * [in] read_upto: Max number of bytes which must be read from `fd`.
+   * [out] int : Number of bytes written to `buf` or read from `fd`
+   *		OR -1 in case of error.
+   *  NOTE: In case of EINTR while reading from socket, this API
+   *  will retry to read from `fd`, but only till the EINTR counter
+   *  reaches 50 after which it will return with whatever data it read.
+   */
   static
   int read_atmost_n(int fd, char* buf, size_t read_upto)
   {
@@ -143,7 +293,21 @@ namespace util
     return rbytes;
   }
 
+
+  /*!
+   * Function: read_all
+   * Reads all the available data from `fd` into
+   * `buf`. Internally calls read_atmost_n.
+   * Parameters:
+   * [in] fd : The file descriptor from which to read from.
+   * [in] buf : The buffer of type `class Buffer` into which
+   *	       the read data is written to.
+   * [out] int: Number of bytes read OR -1 in case of failure.
+   *
+   * NOTE: `class Buffer` is a exposed public class. See below.
+   */
   template <typename Buffer>
+  // Requires Buffer to be of type class Buffer
   static int read_all(int fd, Buffer& buf)
   {
     size_t orig_size = buf.size();
@@ -171,6 +335,20 @@ namespace util
     return total_bytes_read;
   }
 
+
+  /*!
+   * Function: wait_for_child_exit
+   * Waits for the process with pid `pid` to exit
+   * and returns its status.
+   * Parameters:
+   * [in] pid : The pid of the process.
+   * [out] pair<int, int>:
+   *	pair.first : Return code of the waitpid call.
+   *	pair.second : Exit status of the process.
+   *
+   *  NOTE:  This is a blocking call as in, it will loop
+   *  till the child is exited.
+   */
   static
   std::pair<int, int> wait_for_child_exit(int pid)
   {
@@ -190,22 +368,52 @@ namespace util
 }; // end namespace util
 
 
-// Popen Arguments
+
+/* -------------------------------
+ *     Popen Arguments
+ * -------------------------------
+ */
+
+/*!
+ * The buffer size of the stdin/stdout/stderr
+ * streams of the child process.
+ * Default value is 0.
+ */
 struct bufsize { 
   bufsize(int siz): bufsiz(siz) {}
   int  bufsiz = 0;
 };
 
+/*!
+ * Option to defer spawning of the child process
+ * till `Popen::start_process` API is called.
+ * Default value is false.
+ */
 struct defer_spawn { 
   defer_spawn(bool d): defer(d) {}
   bool defer  = false;
 };
 
+/*!
+ * Option to close all file descriptors
+ * when the child process is spawned.
+ * The close fd list does not include
+ * input/output/error if they are explicitly
+ * set as part of the Popen arguments.
+ *
+ * Default value is false.
+ */
 struct close_fds { 
   close_fds(bool c): close_all(c) {}
   bool close_all = false;
 };
 
+/*!
+ * Option to make the child process as the
+ * session leader and thus the process
+ * group leader.
+ * Default value is false.
+ */
 struct session_leader {
   session_leader(bool sl): leader_(sl) {}
   bool leader_ = false;
@@ -216,6 +424,9 @@ struct shell {
   bool shell_ = false;
 };
 
+/*!
+ * Base class for all arguments involving string value.
+ */
 struct string_arg
 {
   string_arg(const char* arg): arg_value(arg) {}
@@ -224,18 +435,38 @@ struct string_arg
   std::string arg_value;
 };
 
+/*!
+ * Option to specify the executable name seperately
+ * from the args sequence.
+ * In this case the cmd args must only contain the 
+ * options required for this executable.
+ *
+ * Eg: executable{"ls"}
+ */
 struct executable: string_arg
 {
   template <typename T>
   executable(T&& arg): string_arg(std::forward<T>(arg)) {}
 };
 
+/*!
+ * Option to set the current working directory
+ * of the spawned process.
+ *
+ * Eg: cwd{"/som/path/x"}
+ */
 struct cwd: string_arg
 {
   template <typename T>
   cwd(T&& arg): string_arg(std::forward<T>(arg)) {}
 };
 
+/*!
+ * Option to specify environment variables required by
+ * the spawned process.
+ *
+ * Eg: environment{{ {"K1", "V1"}, {"K2", "V2"},... }}
+ */
 struct environment
 {
   environment(std::map<std::string, std::string>&& env):
@@ -245,6 +476,10 @@ struct environment
   std::map<std::string, std::string> env_;
 };
 
+
+/*!
+ * Used for redirecting input/output/error
+ */
 enum IOTYPE { 
   STDOUT = 1,
   STDERR,
@@ -253,10 +488,23 @@ enum IOTYPE {
 
 //TODO: A common base/interface for below stream structures ??
 
+/*!
+ * Option to specify the input channel for the child
+ * process. It can be:
+ * 1. An already open file descriptor.
+ * 2. A file name.
+ * 3. IOTYPE. Usuall a PIPE
+ *
+ * Eg: input{PIPE}
+ * OR in case of redirection, output of another Popen
+ * input{popen.output()}
+ */
 struct input
 {
+  // For an already existing file descriptor.
   input(int fd): rd_ch_(fd) {}
 
+  // FILE pointer.
   input (FILE* fp):input(fileno(fp)) { assert(fp); }
 
   input(const char* filename) {
@@ -273,6 +521,17 @@ struct input
   int wr_ch_ = -1;
 };
 
+
+/*!
+ * Option to specify the output channel for the child
+ * process. It can be:
+ * 1. An already open file descriptor.
+ * 2. A file name.
+ * 3. IOTYPE. Usually a PIPE.
+ *
+ * Eg: output{PIPE}
+ * OR output{"output.txt"}
+ */
 struct output
 {
   output(int fd): wr_ch_(fd) {}
@@ -293,6 +552,15 @@ struct output
   int wr_ch_ = -1;
 };
 
+
+/*!
+ * Option to specify the error channel for the child
+ * process. It can be:
+ * 1. An already open file descriptor.
+ * 2. A file name.
+ * 3. IOTYPE. Usually a PIPE or STDOUT
+ *
+ */
 struct error
 {
   error(int fd): wr_ch_(fd) {}
@@ -357,9 +625,19 @@ private:
 };
 
 // ~~~~ End Popen Args ~~~~
-//
 
 
+/*!
+ * class: Buffer
+ * This class is a very thin wrapper around std::vector<char>
+ * This is basically used to determine the length of the actual
+ * data stored inside the dynamically resized vector.
+ *
+ * This is what is returned as the output to communicate and check_output
+ * functions, so, users must know about this class.
+ *
+ * OutBuffer and ErrBuffer are just different typedefs to this class.
+ */
 class Buffer
 {
 public:
@@ -388,16 +666,27 @@ public:
   size_t length = 0;
 };
 
+// Buffer for storing output written to output fd
 using OutBuffer = Buffer;
+// Buffer for storing output written to error fd
 using ErrBuffer = Buffer;
+
 
 // Fwd Decl.
 class Popen;
 
+/*---------------------------------------------------
+ *      DETAIL NAMESPACE
+ *---------------------------------------------------
+ */
+
 namespace detail {
 
-// Type trait for searching a type within
+// Metaprogram for searching a type within
 // a variadic parameter pack
+// This is particularly required to do a compile time
+// checking of the arguments provided to 'check_ouput' function
+// wherein the user is not expected to provide an 'ouput' option.
 
 template <typename... T> struct param_pack{};
 
@@ -421,6 +710,14 @@ struct has_type<F, param_pack<H,T...>> {
 
 //----
 
+/*!
+ * A helper class to Popen class for setting 
+ * options as provided in the Popen constructor
+ * or in check_ouput arguments.
+ * This design allows us to _not_ have any fixed position
+ * to any arguments and specify them in a way similar to what 
+ * can be done in python.
+ */
 struct ArgumentDeducer
 {
   ArgumentDeducer(Popen* p): popen_(p) {}
@@ -442,7 +739,11 @@ private:
   Popen* popen_ = nullptr;
 };
 
-
+/*!
+ * A helper class to Popen.
+ * This takes care of all the fork-exec logic
+ * in the execute_child API.
+ */
 class Child
 {
 public:
@@ -460,8 +761,15 @@ private:
   int err_wr_pipe_ = -1;
 };
 
+// Fwd Decl.
 class Streams;
 
+/*!
+ * A helper class to Streams.
+ * This takes care of management of communicating
+ * with the child process with the means of the correct
+ * file descriptor.
+ */
 class Communication
 {
 public:
@@ -489,6 +797,17 @@ private:
   size_t err_buf_cap_ = DEFAULT_BUF_CAP_BYTES;
 };
 
+
+
+/*!
+ * This is a helper class to Popen.
+ * It takes care of management of all the file descriptors
+ * and file pointers.
+ * It dispatches of the communication aspects to the 
+ * Communication class.
+ * Read through the data members to understand about the
+ * various file descriptors used.
+ */
 class Streams
 {
 public:
@@ -580,6 +899,35 @@ private:
 }; // end namespace detail
 
 
+
+/*!
+ * class: Popen
+ * This is the single most important class in the whole library
+ * and glues together all the helper classes to provide a common
+ * interface to the client.
+ *
+ * API's provided by the class:
+ * 1. Popen({"cmd"}, output{..}, error{..}, cwd{..}, ....)
+ *    Command provided as a sequence.
+ * 2. Popen("cmd arg1"m output{..}, error{..}, cwd{..}, ....)
+ *    Command provided in a single string.
+ * 3. wait()             - Wait for the child to exit.
+ * 4. retcode()          - The return code of the exited child.
+ * 5. pid()              - PID of the spawned child.
+ * 6. poll()             - Check the status of the running child.
+ * 7. kill(sig_num)      - Kill the child. SIGTERM used by default.
+ * 8. send(...)          - Send input to the input channel of the child.
+ * 9. communicate(...)   - Get the output/error from the child and close the channels
+ *			   from the parent side.
+ *10. input()            - Get the input channel/File pointer. Can be used for
+ *			   cutomizing the way of sending input to child.
+ *11. output()           - Get the output channel/File pointer. Usually used
+			   in case of redirection. See piping examples.
+ *12. error()            - Get the error channel/File poiner. Usually used
+			   in case of redirection.
+ *13. start_process()    - Start the child process. Only to be used when
+ *                         `defer_spawn` option was provided in Popen constructor.
+ */
 class Popen
 {
 public:
@@ -706,6 +1054,7 @@ void Popen::init_args(F&& farg, Args&&... args)
 
 void Popen::populate_c_argv()
 {
+  cargv_.clear();
   cargv_.reserve(vargs_.size() + 1);
   for (auto& arg : vargs_) cargv_.push_back(&arg[0]);
   cargv_.push_back(nullptr);
@@ -787,11 +1136,14 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
 
   if (shell_) {
     vargs_.insert(vargs_.begin(), {"/bin/sh", "-c"});
+    populate_c_argv();
   }
 
-  if (!exe_name_.length()) {
-    exe_name_ = vargs_[0];
+  if (exe_name_.length()) {
+    vargs_.insert(vargs_.begin(), exe_name_);
+    populate_c_argv();
   }
+  exe_name_ = vargs_[0];
 
   child_pid_ = fork();
 
@@ -1202,6 +1554,17 @@ namespace detail
 
 }
 
+/*-----------------------------------------------------------
+ *        CONVIENIENCE FUNCTIONS
+ *-----------------------------------------------------------
+ */
+
+
+/*!
+ * Run the command with arguments and wait for it to complete.
+ * The parameters passed to the argument are exactly the same 
+ * one would use for Popen constructors.
+ */
 template<typename... Args>
 int call(std::initializer_list<const char*> plist, Args&&... args)
 {
@@ -1214,6 +1577,12 @@ int call(const std::string& arg, Args&&... args)
   return (detail::call_impl(arg, std::forward<Args>(args)...));
 }
 
+
+/*!
+ * Run the command with arguments and wait for it to complete.
+ * If the exit code was non-zero it raises a CalledProcessError.
+ * The arguments are the same as for the Popen constructor.
+ */
 template <typename... Args>
 OutBuffer check_output(std::initializer_list<const char*> plist, Args&&... args)
 {
@@ -1226,8 +1595,14 @@ OutBuffer check_output(const std::string& arg, Args&&... args)
   return (detail::check_output_impl(arg, std::forward<Args>(args)...));
 }
 
-// Piping Support
 
+/*!
+ * An easy way to pipeline easy commands.
+ * Provide the commands that needs to be pipelined in the order they
+ * would appear in a regular command.
+ * It would wait for the last command provided in the pipeline
+ * to finish and then return the OutBuffer.
+ */
 template<typename... Args>
 // Args expected to be flat commands using string instead of initializer_list
 OutBuffer pipeline(Args&&... args)
@@ -1240,3 +1615,5 @@ OutBuffer pipeline(Args&&... args)
 }
 
 };
+
+#endif // __SUBPROCESS_HPP_
