@@ -39,11 +39,24 @@ void test_shell()
   std::cout << obuf.buf.data() << std::endl;
 }
 
+void test_sleep()
+{
+  auto p = Popen({"sleep", "30"}, shell{true});
+
+  while (p.poll() == -1) {
+    std::cout << "Waiting..." << std::endl;
+    sleep(1);
+  }
+
+  std::cout << "Sleep ended: ret code = " << p.retcode() << std::endl;
+}
+
 int main() {
   test_exename();
   test_input();
   test_piping();
   test_easy_piping();
   test_shell();
+  test_sleep();
   return 0;
 }

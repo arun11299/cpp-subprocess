@@ -1092,9 +1092,11 @@ int Popen::wait() throw (OSError)
 int Popen::poll() throw (OSError)
 {
   int status;
-  if (!child_created_) return 0; // TODO: ??
+  if (!child_created_) return -1; // TODO: ??
 
+  // Returns zero if child is still running
   int ret = waitpid(child_pid_, &status, WNOHANG);
+  if (ret == 0) return -1;
 
   if (ret == child_pid_) {
     if (WIFSIGNALED(status)) {
@@ -1135,7 +1137,10 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
 
   if (shell_) {
+    auto new_cmd = util::join(vargs_);
+    vargs_.clear();
     vargs_.insert(vargs_.begin(), {"/bin/sh", "-c"});
+    vargs_.push_back(new_cmd);
     populate_c_argv();
   }
 
@@ -1524,8 +1529,8 @@ namespace detail
     auto p = Popen(std::forward<F>(farg), std::forward<Args>(args)..., output{PIPE});
     auto res = p.communicate(nullptr, 0);
     auto retcode = p.poll();
-    if (retcode) {
-      throw CalledProcessError("Command failed");
+    if (retcode > 0) {
+      throw CalledProcessError("Command failed : Non zero retcode");
     }
     return std::move(res.first);
   }
