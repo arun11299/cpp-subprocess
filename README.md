@@ -19,6 +19,8 @@ It has no support for Windows in its current state.
 ## Integration
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
 
+Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-modern-c.html as well.
+
 ```cpp
 #inlcude "subprocess.hpp"
 
