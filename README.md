@@ -19,8 +19,6 @@ It has no support for Windows in its current state.
 ## Integration
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
 
-Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-modern-c.html as well.
-
 ```cpp
 #inlcude "subprocess.hpp"
 
@@ -30,6 +28,8 @@ using namespace subprocess;
 // Or give any other alias you like.
 ```
 to the files where you want to make use of subprocessing. Make sure to add necessary switches to add C++11 support (-std=c++11 in g++ and clang).
+
+Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-modern-c.html as well.
 
 ## Compiler Support
 Linux - g++ 4.8 and above
