@@ -1245,11 +1245,12 @@ namespace detail {
   }
 
   void ArgumentDeducer::set_option(error&& err) {
-    if (err.deferred_ && popen_->stream_.write_to_parent_) {
-      popen_->stream_.err_write_ = popen_->stream_.write_to_parent_;
-      return;
-    } else {
-      throw "Set output before redirecting error to output";
+    if (err.deferred_) {
+      if (popen_->stream_.write_to_parent_) {
+        popen_->stream_.err_write_ = popen_->stream_.write_to_parent_;
+      } else {
+        throw std::runtime_error("Set output before redirecting error to output");
+      }
     }
     if (err.wr_ch_ != -1) popen_->stream_.err_write_ = err.wr_ch_;
     if (err.rd_ch_ != -1) popen_->stream_.err_read_ = err.rd_ch_;
@@ -1466,26 +1467,23 @@ namespace detail {
   {
     OutBuffer obuf;
     ErrBuffer ebuf;
-
     std::future<int> out_fut, err_fut;
 
     if (stream_->output()) {
       obuf.add_cap(out_buf_cap_);
 
       out_fut = std::async(std::launch::async,
-			   util::read_atmost_n, 
-			   fileno(stream_->output()),
-			   obuf.buf.data(), 
-			   obuf.buf.size());
+                          [&obuf, this] {
+                            return util::read_all(fileno(this->stream_->output()), obuf.buf);
+                          });
     }
     if (stream_->error()) {
       ebuf.add_cap(err_buf_cap_);
 
       err_fut = std::async(std::launch::async,
-			   util::read_atmost_n, 
-			   fileno(stream_->error()),
-			   ebuf.buf.data(), 
-			   ebuf.buf.size());
+                          [&ebuf, this] {
+                            return util::read_all(fileno(this->stream_->error()), ebuf.buf);
+                          });
     }
     if (stream_->input()) {
       if (msg) {
@@ -1527,7 +1525,7 @@ namespace detail
   {
     static_assert(!detail::has_type<output, detail::param_pack<Args...>>::value, "output not allowed in args");
     auto p = Popen(std::forward<F>(farg), std::forward<Args>(args)..., output{PIPE});
-    auto res = p.communicate(nullptr, 0);
+    auto res = p.communicate();
     auto retcode = p.poll();
     if (retcode > 0) {
       throw CalledProcessError("Command failed : Non zero retcode");
