@@ -959,6 +959,17 @@ public:
     if (!defer_process_start_) execute_process();
   }
 
+  template <typename... Args>
+  Popen(std::vector<std::string> cmd_args, Args&& ...args):vargs_(cmd_args)
+  {
+    init_args(std::forward<Args>(args)...);
+
+    // Setup the communication channels of the Popen class
+    stream_.setup_comm_channels();
+
+    if (!defer_process_start_) execute_process();
+  }
+
   void start_process() throw (CalledProcessError, OSError);
 
   int pid() const noexcept { return child_pid_; }
