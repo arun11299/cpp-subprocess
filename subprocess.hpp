@@ -960,7 +960,7 @@ public:
   }
 
   template <typename... Args>
-  Popen(std::vector<std::string> cmd_args, Args&& ...args):vargs_(cmd_args)
+  Popen(std::vector<std::string> vargs_, Args&& ...args):vargs_(vargs_)
   {
     init_args(std::forward<Args>(args)...);
 
