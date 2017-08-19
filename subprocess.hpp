@@ -932,7 +932,7 @@ private:
 class Popen
 {
 public:
-  friend class detail::ArgumentDeducer;
+  friend struct detail::ArgumentDeducer;
   friend class detail::Child;
 
   template <typename... Args>
