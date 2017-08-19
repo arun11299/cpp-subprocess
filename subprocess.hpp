@@ -1179,7 +1179,6 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
   }
   else
   {
-    int sys_ret = -1;
     close (err_wr_pipe);// close child side of pipe, else get stuck in read below
 
     stream_.close_child_fds();
