@@ -146,7 +146,7 @@ namespace util
    *		    to be split. Default constructed to ' '(space) and '\t'(tab)
    * [out] vector<string> : Vector of strings split at deleimiter.
    */
-  static std::vector<std::string>
+  static inline std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
     std::vector<std::string> res;
