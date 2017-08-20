@@ -146,7 +146,7 @@ namespace util
    *		    to be split. Default constructed to ' '(space) and '\t'(tab)
    * [out] vector<string> : Vector of strings split at deleimiter.
    */
-  static std::vector<std::string>
+  static inline std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
     std::vector<std::string> res;
@@ -932,7 +932,7 @@ private:
 class Popen
 {
 public:
-  friend class detail::ArgumentDeducer;
+  friend struct detail::ArgumentDeducer;
   friend class detail::Child;
 
   template <typename... Args>
@@ -1179,7 +1179,6 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
   }
   else
   {
-    int sys_ret = -1;
     close (err_wr_pipe);// close child side of pipe, else get stuck in read below
 
     stream_.close_child_fds();
