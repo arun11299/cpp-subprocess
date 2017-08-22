@@ -176,7 +176,7 @@ namespace util
    *             Default constructed to ' ' (space).
    *  [out] string: Joined string.
    */
-  static
+  static inline
   std::string join(const std::vector<std::string>& vec,
                    const std::string& sep = " ")
   {
@@ -196,7 +196,7 @@ namespace util
    * [in] set : If 'true', set FD_CLOEXEC.
    *            If 'false' unset FD_CLOEXEC.
    */
-  static
+  static inline
   void set_clo_on_exec(int fd, bool set = true)
   {
     int flags = fcntl(fd, F_GETFD, 0);
@@ -216,7 +216,7 @@ namespace util
    *         First element of pair is the read descriptor of pipe.
    *         Second element is the write descriptor of pipe.
    */
-  static
+  static inline
   std::pair<int, int> pipe_cloexec() throw (OSError)
   {
     int pipe_fds[2];
@@ -243,7 +243,7 @@ namespace util
    *              `buf` to `fd`.
    * [out] int : Number of bytes written or -1 in case of failure.
    */
-  static
+  static inline
   int write_n(int fd, const char* buf, size_t length)
   {
     int nwritten = 0;
@@ -270,7 +270,7 @@ namespace util
    *  will retry to read from `fd`, but only till the EINTR counter
    *  reaches 50 after which it will return with whatever data it read.
    */
-  static
+  static inline
   int read_atmost_n(int fd, char* buf, size_t read_upto)
   {
     int rbytes = 0;
@@ -308,7 +308,7 @@ namespace util
    */
   template <typename Buffer>
   // Requires Buffer to be of type class Buffer
-  static int read_all(int fd, Buffer& buf)
+  static inline int read_all(int fd, Buffer& buf)
   {
     size_t orig_size = buf.size();
     size_t increment = orig_size;
@@ -349,7 +349,7 @@ namespace util
    *  NOTE: This is a blocking call as in, it will loop
    *  till the child is exited.
    */
-  static
+  static inline
   std::pair<int, int> wait_for_child_exit(int pid)
   {
     int status = 0;
@@ -1543,12 +1543,15 @@ namespace detail
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
 
-  static void pipeline_impl(std::vector<Popen>& cmds) { /* EMPTY IMPL */ }
+  static inline void pipeline_impl(std::vector<Popen>& cmds)
+  {
+    /* EMPTY IMPL */
+  }
 
   template<typename... Args>
-  static void pipeline_impl(std::vector<Popen>& cmds,
-                            const std::string& cmd,
-                            Args&&... args)
+  static inline void pipeline_impl(std::vector<Popen>& cmds,
+                                   const std::string& cmd,
+                                   Args&&... args)
   {
     if (cmds.size() == 0) {
       cmds.emplace_back(cmd, output{PIPE}, defer_spawn{true});
