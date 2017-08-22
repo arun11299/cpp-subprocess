@@ -218,7 +218,7 @@ namespace util
    *	     Second element is the write descriptor of pipe.
    */
   static
-  std::pair<int, int> pipe_cloexec() throw (OSError)
+  std::pair<int, int> pipe_cloexec() throw()
   {
     int pipe_fds[2];
     int res = pipe(pipe_fds);
@@ -960,15 +960,26 @@ public:
     if (!defer_process_start_) execute_process();
   }
 
-  void start_process() throw (CalledProcessError, OSError);
+  template <typename... Args>
+  Popen(std::vector<std::string> vargs_, Args&& ...args):vargs_(vargs_)
+  {
+    init_args(std::forward<Args>(args)...);
+
+    // Setup the communication channels of the Popen class
+    stream_.setup_comm_channels();
+
+    if (!defer_process_start_) execute_process();
+  }
+
+  void start_process() throw();
 
   int pid() const noexcept { return child_pid_; }
 
   int retcode() const noexcept { return retcode_; }
 
-  int wait() throw(OSError);
+  int wait() throw();
 
-  int poll() throw(OSError);
+  int poll() throw();
 
   // Does not fail, Caller is expected to recheck the
   // status with a call to poll()
@@ -1012,7 +1023,7 @@ private:
   void init_args(F&& farg, Args&&... args);
   void init_args();
   void populate_c_argv();
-  void execute_process() throw (CalledProcessError, OSError);
+  void execute_process() throw();
 
 private:
   detail::Streams stream_;
@@ -1061,7 +1072,7 @@ void Popen::populate_c_argv()
   cargv_.push_back(nullptr);
 }
 
-void Popen::start_process() throw (CalledProcessError, OSError)
+void Popen::start_process() throw()
 {
   // The process was started/tried to be started
   // in the constructor itself.
@@ -1075,7 +1086,7 @@ void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-int Popen::wait() throw (OSError)
+int Popen::wait() throw()
 {
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
@@ -1090,7 +1101,7 @@ int Popen::wait() throw (OSError)
   return 0;
 }
 
-int Popen::poll() throw (OSError)
+int Popen::poll() throw()
 {
   int status;
   if (!child_created_) return -1; // TODO: ??
@@ -1132,7 +1143,7 @@ void Popen::kill(int sig_num)
 }
 
 
-void Popen::execute_process() throw (CalledProcessError, OSError)
+void Popen::execute_process() throw()
 {
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
