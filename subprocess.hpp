@@ -141,9 +141,9 @@ namespace util
    * Function: split
    * Parameters:
    * [in] str : Input string which needs to be split based upon the
-   *		delimiters provided.
+   *            delimiters provided.
    * [in] deleims : Delimiter characters based upon which the string needs
-   *		    to be split. Default constructed to ' '(space) and '\t'(tab)
+   *                to be split. Default constructed to ' '(space) and '\t'(tab)
    * [out] vector<string> : Vector of strings split at deleimiter.
    */
   static inline std::vector<std::string>
@@ -155,8 +155,8 @@ namespace util
     while (true) {
       auto pos = str.find_first_of(delims, init);
       if (pos == std::string::npos) {
-	res.emplace_back(str.substr(init, str.length()));
-	break;
+        res.emplace_back(str.substr(init, str.length()));
+        break;
       }
       res.emplace_back(str.substr(init, pos - init));
       pos++;
@@ -171,15 +171,14 @@ namespace util
    * Function: join
    * Parameters:
    * [in] vec : Vector of strings which needs to be joined to form
-   *		a single string with words seperated by
-   *		a seperator char.
+   *            a single string with words seperated by a seperator char.
    *  [in] sep : String used to seperate 2 words in the joined string.
-   *		 Default constructed to ' ' (space).
+   *             Default constructed to ' ' (space).
    *  [out] string: Joined string.
    */
-  static
+  static inline
   std::string join(const std::vector<std::string>& vec,
-		   const std::string& sep = " ")
+                   const std::string& sep = " ")
   {
     std::string res;
     for (auto& elem : vec) res.append(elem + sep);
@@ -195,9 +194,9 @@ namespace util
    * Parameters:
    * [in] fd : The descriptor on which FD_CLOEXEC needs to be set/reset.
    * [in] set : If 'true', set FD_CLOEXEC.
-   *	        If 'false' unset FD_CLOEXEC.
+   *            If 'false' unset FD_CLOEXEC.
    */
-  static
+  static inline
   void set_clo_on_exec(int fd, bool set = true)
   {
     int flags = fcntl(fd, F_GETFD, 0);
@@ -214,10 +213,10 @@ namespace util
    * read and write descriptors of the pipe.
    * Parameters:
    * [out] : A pair of file descriptors.
-   *	     First element of pair is the read descriptor of pipe.
-   *	     Second element is the write descriptor of pipe.
+   *         First element of pair is the read descriptor of pipe.
+   *         Second element is the write descriptor of pipe.
    */
-  static
+  static inline
   std::pair<int, int> pipe_cloexec() throw (OSError)
   {
     int pipe_fds[2];
@@ -241,10 +240,10 @@ namespace util
    * [in] fd : The file descriptotr to write to.
    * [in] buf: Buffer from which data needs to be written to fd.
    * [in] length: The number of bytes that needs to be written from
-   *		  `buf` to `fd`.
+   *              `buf` to `fd`.
    * [out] int : Number of bytes written or -1 in case of failure.
    */
-  static
+  static inline
   int write_n(int fd, const char* buf, size_t length)
   {
     int nwritten = 0;
@@ -266,12 +265,12 @@ namespace util
    * [in] buf : The buffer into which it needs to write the data.
    * [in] read_upto: Max number of bytes which must be read from `fd`.
    * [out] int : Number of bytes written to `buf` or read from `fd`
-   *		OR -1 in case of error.
+   *             OR -1 in case of error.
    *  NOTE: In case of EINTR while reading from socket, this API
    *  will retry to read from `fd`, but only till the EINTR counter
    *  reaches 50 after which it will return with whatever data it read.
    */
-  static
+  static inline
   int read_atmost_n(int fd, char* buf, size_t read_upto)
   {
     int rbytes = 0;
@@ -280,12 +279,12 @@ namespace util
     while (1) {
       int read_bytes = read(fd, buf, read_upto);
       if (read_bytes == -1) {
-      	if (errno == EINTR) {
-      	  if (eintr_cnter >= 50) return -1;
-      	  eintr_cnter++;
-      	  continue;
-	}
-	return -1;
+        if (errno == EINTR) {
+          if (eintr_cnter >= 50) return -1;
+          eintr_cnter++;
+          continue;
+        }
+        return -1;
       }
       if (read_bytes == 0) return rbytes;
 
@@ -302,14 +301,14 @@ namespace util
    * Parameters:
    * [in] fd : The file descriptor from which to read from.
    * [in] buf : The buffer of type `class Buffer` into which
-   *	       the read data is written to.
+   *            the read data is written to.
    * [out] int: Number of bytes read OR -1 in case of failure.
    *
    * NOTE: `class Buffer` is a exposed public class. See below.
    */
   template <typename Buffer>
   // Requires Buffer to be of type class Buffer
-  static int read_all(int fd, Buffer& buf)
+  static inline int read_all(int fd, Buffer& buf)
   {
     size_t orig_size = buf.size();
     size_t increment = orig_size;
@@ -319,18 +318,18 @@ namespace util
     while (1) {
       int rd_bytes = read_atmost_n(fd, buffer, buf.size());
       if (rd_bytes == increment) {
-	// Resize the buffer to accomodate more
-	orig_size = orig_size * 1.5;
-	increment = orig_size - buf.size();
-	buf.resize(orig_size);
-	buffer += rd_bytes;
-	total_bytes_read += rd_bytes;
-      } else if (rd_bytes != -1){
-      	total_bytes_read += rd_bytes;
-      	break;
+        // Resize the buffer to accomodate more
+        orig_size = orig_size * 1.5;
+        increment = orig_size - buf.size();
+        buf.resize(orig_size);
+        buffer += rd_bytes;
+        total_bytes_read += rd_bytes;
+      } else if (rd_bytes != -1) {
+        total_bytes_read += rd_bytes;
+        break;
       } else {
-      	if (total_bytes_read == 0) return -1;
-      	break;
+        if (total_bytes_read == 0) return -1;
+        break;
       }
     }
     return total_bytes_read;
@@ -344,13 +343,13 @@ namespace util
    * Parameters:
    * [in] pid : The pid of the process.
    * [out] pair<int, int>:
-   *	pair.first : Return code of the waitpid call.
-   *	pair.second : Exit status of the process.
+   *    pair.first : Return code of the waitpid call.
+   *    pair.second : Exit status of the process.
    *
-   *  NOTE:  This is a blocking call as in, it will loop
+   *  NOTE: This is a blocking call as in, it will loop
    *  till the child is exited.
    */
-  static
+  static inline
   std::pair<int, int> wait_for_child_exit(int pid)
   {
     int status = 0;
@@ -919,13 +918,13 @@ private:
  * 7. kill(sig_num)      - Kill the child. SIGTERM used by default.
  * 8. send(...)          - Send input to the input channel of the child.
  * 9. communicate(...)   - Get the output/error from the child and close the channels
- *			   from the parent side.
+ *                         from the parent side.
  *10. input()            - Get the input channel/File pointer. Can be used for
- *			   cutomizing the way of sending input to child.
+ *                         cutomizing the way of sending input to child.
  *11. output()           - Get the output channel/File pointer. Usually used
-			   in case of redirection. See piping examples.
+                           in case of redirection. See piping examples.
  *12. error()            - Get the error channel/File poiner. Usually used
-			   in case of redirection.
+                           in case of redirection.
  *13. start_process()    - Start the child process. Only to be used when
  *                         `defer_spawn` option was provided in Popen constructor.
  */
@@ -1041,19 +1040,19 @@ private:
   int retcode_ = -1;
 };
 
-void Popen::init_args() {
+inline void Popen::init_args() {
   populate_c_argv();
 }
 
 template <typename F, typename... Args>
-void Popen::init_args(F&& farg, Args&&... args)
+inline void Popen::init_args(F&& farg, Args&&... args)
 {
   detail::ArgumentDeducer argd(this);
   argd.set_option(std::forward<F>(farg));
   init_args(std::forward<Args>(args)...);
 }
 
-void Popen::populate_c_argv()
+inline void Popen::populate_c_argv()
 {
   cargv_.clear();
   cargv_.reserve(vargs_.size() + 1);
@@ -1061,7 +1060,7 @@ void Popen::populate_c_argv()
   cargv_.push_back(nullptr);
 }
 
-void Popen::start_process() throw (CalledProcessError, OSError)
+inline void Popen::start_process() throw (CalledProcessError, OSError)
 {
   // The process was started/tried to be started
   // in the constructor itself.
@@ -1075,7 +1074,7 @@ void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-int Popen::wait() throw (OSError)
+inline int Popen::wait() throw (OSError)
 {
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
@@ -1090,7 +1089,7 @@ int Popen::wait() throw (OSError)
   return 0;
 }
 
-int Popen::poll() throw (OSError)
+inline int Popen::poll() throw (OSError)
 {
   int status;
   if (!child_created_) return -1; // TODO: ??
@@ -1125,14 +1124,14 @@ int Popen::poll() throw (OSError)
   return retcode_;
 }
 
-void Popen::kill(int sig_num)
+inline void Popen::kill(int sig_num)
 {
   if (session_leader_) killpg(child_pid_, sig_num);
   else ::kill(child_pid_, sig_num);
 }
 
 
-void Popen::execute_process() throw (CalledProcessError, OSError)
+inline void Popen::execute_process() throw (CalledProcessError, OSError)
 {
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
@@ -1187,19 +1186,19 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
       char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
 
       int read_bytes = util::read_atmost_n(
-				  err_rd_pipe,
-				  err_buf,
-				  SP_MAX_ERR_BUF_SIZ);
+                                  err_rd_pipe,
+                                  err_buf,
+                                  SP_MAX_ERR_BUF_SIZ);
       close(err_rd_pipe);
 
       if (read_bytes || strlen(err_buf)) {
-	// Call waitpid to reap the child process
-	// waitpid suspends the calling process until the
-	// child terminates.
-	wait();
+        // Call waitpid to reap the child process
+        // waitpid suspends the calling process until the
+        // child terminates.
+        wait();
 
-	// Throw whatever information we have about child failure
-	throw CalledProcessError(err_buf);
+        // Throw whatever information we have about child failure
+        throw CalledProcessError(err_buf);
       }
     } catch (std::exception& exp) {
       stream_.cleanup_fds();
@@ -1211,45 +1210,45 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
 
 namespace detail {
 
-  void ArgumentDeducer::set_option(executable&& exe) {
+  inline void ArgumentDeducer::set_option(executable&& exe) {
     popen_->exe_name_ = std::move(exe.arg_value);
   }
 
-  void ArgumentDeducer::set_option(cwd&& cwdir) {
+  inline void ArgumentDeducer::set_option(cwd&& cwdir) {
     popen_->cwd_ = std::move(cwdir.arg_value);
   }
 
-  void ArgumentDeducer::set_option(bufsize&& bsiz) {
+  inline void ArgumentDeducer::set_option(bufsize&& bsiz) {
     popen_->stream_.bufsiz_ = bsiz.bufsiz;
   }
 
-  void ArgumentDeducer::set_option(environment&& env) {
+  inline void ArgumentDeducer::set_option(environment&& env) {
     popen_->env_ = std::move(env.env_);
   }
 
-  void ArgumentDeducer::set_option(defer_spawn&& defer) {
+  inline void ArgumentDeducer::set_option(defer_spawn&& defer) {
     popen_->defer_process_start_ = defer.defer;
   }
 
-  void ArgumentDeducer::set_option(shell&& sh) {
+  inline void ArgumentDeducer::set_option(shell&& sh) {
     popen_->shell_ = sh.shell_;
   }
 
-  void ArgumentDeducer::set_option(session_leader&& sleader) {
+  inline void ArgumentDeducer::set_option(session_leader&& sleader) {
     popen_->session_leader_ = sleader.leader_;
   }
 
-  void ArgumentDeducer::set_option(input&& inp) {
+  inline void ArgumentDeducer::set_option(input&& inp) {
     if (inp.rd_ch_ != -1) popen_->stream_.read_from_parent_ = inp.rd_ch_;
     if (inp.wr_ch_ != -1) popen_->stream_.write_to_child_ = inp.wr_ch_;
   }
 
-  void ArgumentDeducer::set_option(output&& out) {
+  inline void ArgumentDeducer::set_option(output&& out) {
     if (out.wr_ch_ != -1) popen_->stream_.write_to_parent_ = out.wr_ch_;
     if (out.rd_ch_ != -1) popen_->stream_.read_from_child_ = out.rd_ch_;
   }
 
-  void ArgumentDeducer::set_option(error&& err) {
+  inline void ArgumentDeducer::set_option(error&& err) {
     if (err.deferred_) {
       if (popen_->stream_.write_to_parent_) {
         popen_->stream_.err_write_ = popen_->stream_.write_to_parent_;
@@ -1261,26 +1260,26 @@ namespace detail {
     if (err.rd_ch_ != -1) popen_->stream_.err_read_ = err.rd_ch_;
   }
 
-  void ArgumentDeducer::set_option(close_fds&& cfds) {
+  inline void ArgumentDeducer::set_option(close_fds&& cfds) {
     popen_->close_fds_ = cfds.close_all;
   }
 
-  void ArgumentDeducer::set_option(preexec_func&& prefunc) {
+  inline void ArgumentDeducer::set_option(preexec_func&& prefunc) {
     popen_->preexec_fn_ = std::move(prefunc);
     popen_->has_preexec_fn_ = true;
   }
 
 
-  void Child::execute_child() {
+  inline void Child::execute_child() {
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
     try {
       if (stream.write_to_parent_ == 0)
-      	stream.write_to_parent_ = dup(stream.write_to_parent_);
+        stream.write_to_parent_ = dup(stream.write_to_parent_);
 
       if (stream.err_write_ == 0 || stream.err_write_ == 1)
-      	stream.err_write_ = dup(stream.err_write_);
+        stream.err_write_ = dup(stream.err_write_);
 
       // Make the child owned descriptors as the
       // stdin, stdout and stderr for the child process
@@ -1307,13 +1306,13 @@ namespace detail {
 
       // Close the duped descriptors
       if (stream.read_from_parent_ != -1 && stream.read_from_parent_ > 2)
-      	close(stream.read_from_parent_);
+        close(stream.read_from_parent_);
 
       if (stream.write_to_parent_ != -1 && stream.write_to_parent_ > 2)
-      	close(stream.write_to_parent_);
+        close(stream.write_to_parent_);
 
       if (stream.err_write_ != -1 && stream.err_write_ > 2)
-      	close(stream.err_write_);
+        close(stream.err_write_);
 
       // Close all the inherited fd's except the error write pipe
       if (parent_->close_fds_) {
@@ -1333,19 +1332,19 @@ namespace detail {
       }
 
       if (parent_->has_preexec_fn_) {
-      	parent_->preexec_fn_();
+        parent_->preexec_fn_();
       }
 
       if (parent_->session_leader_) {
-      	sys_ret = setsid();
-      	if (sys_ret == -1) throw OSError("setsid failed", errno);
+        sys_ret = setsid();
+        if (sys_ret == -1) throw OSError("setsid failed", errno);
       }
 
       // Replace the current image with the executable
       if (parent_->env_.size()) {
         for (auto& kv : parent_->env_) {
           setenv(kv.first.c_str(), kv.second.c_str(), 1);
-	}
+        }
         sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
       } else {
         sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
@@ -1368,7 +1367,7 @@ namespace detail {
   }
 
 
-  void Streams::setup_comm_channels()
+  inline void Streams::setup_comm_channels()
   {
     if (write_to_child_ != -1)  input(fdopen(write_to_child_, "wb"));
     if (read_from_child_ != -1) output(fdopen(read_from_child_, "rb"));
@@ -1380,29 +1379,29 @@ namespace detail {
       if (h == nullptr) continue;
       switch (bufsiz_) {
       case 0:
-	setvbuf(h, nullptr, _IONBF, BUFSIZ);
-	break;
+        setvbuf(h, nullptr, _IONBF, BUFSIZ);
+        break;
       case 1:
-	setvbuf(h, nullptr, _IONBF, BUFSIZ);
-	break;
+        setvbuf(h, nullptr, _IONBF, BUFSIZ);
+        break;
       default:
-	setvbuf(h, nullptr, _IOFBF, bufsiz_);
+        setvbuf(h, nullptr, _IOFBF, bufsiz_);
       };
     }
   }
 
-  int Communication::send(const char* msg, size_t length)
+  inline int Communication::send(const char* msg, size_t length)
   {
     if (stream_->input() == nullptr) return -1;
     return std::fwrite(msg, sizeof(char), length, stream_->input());
   }
 
-  int Communication::send(const std::vector<char>& msg)
+  inline int Communication::send(const std::vector<char>& msg)
   {
     return send(msg.data(), msg.size());
   }
 
-  std::pair<OutBuffer, ErrBuffer>
+  inline std::pair<OutBuffer, ErrBuffer>
   Communication::communicate(const char* msg, size_t length)
   {
     // Optimization from subprocess.py
@@ -1415,50 +1414,50 @@ namespace detail {
       OutBuffer obuf;
       ErrBuffer ebuf;
       if (stream_->input()) {
-      	if (msg) {
-	  int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-	  if (wbytes < length) {
-	    if (errno != EPIPE && errno != EINVAL) {
-	      throw OSError("fwrite error", errno);
-	    }
-	  }
-	}
-	// Close the input stream
-	stream_->input_.reset();
+        if (msg) {
+          int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
+          if (wbytes < length) {
+            if (errno != EPIPE && errno != EINVAL) {
+              throw OSError("fwrite error", errno);
+            }
+          }
+        }
+        // Close the input stream
+        stream_->input_.reset();
       } else if (stream_->output()) {
-      	// Read till EOF
-      	// ATTN: This could be blocking, if the process
-      	// at the other end screws up, we get screwed up as well
-      	obuf.add_cap(out_buf_cap_);
+        // Read till EOF
+        // ATTN: This could be blocking, if the process
+        // at the other end screws up, we get screwed up as well
+        obuf.add_cap(out_buf_cap_);
 
-	int rbytes = util::read_all(
-				  fileno(stream_->output()),
-				  obuf.buf);
+        int rbytes = util::read_all(
+                                  fileno(stream_->output()),
+                                  obuf.buf);
 
-	if (rbytes == -1) {
-	  throw OSError("read to obuf failed", errno);
-	}
+        if (rbytes == -1) {
+          throw OSError("read to obuf failed", errno);
+        }
 
-	obuf.length = rbytes;
-	// Close the output stream
-	stream_->output_.reset();
+        obuf.length = rbytes;
+        // Close the output stream
+        stream_->output_.reset();
 
       } else if (stream_->error()) {
-      	// Same screwness applies here as well
-      	ebuf.add_cap(err_buf_cap_);
+        // Same screwness applies here as well
+        ebuf.add_cap(err_buf_cap_);
 
-      	int rbytes = util::read_atmost_n(
-				  fileno(stream_->error()),
-				  ebuf.buf.data(),
-				  ebuf.buf.size());
+        int rbytes = util::read_atmost_n(
+                                  fileno(stream_->error()),
+                                  ebuf.buf.data(),
+                                  ebuf.buf.size());
 
-      	if (rbytes == -1) {
-      	  throw OSError("read to ebuf failed", errno);
-	}
+        if (rbytes == -1) {
+          throw OSError("read to ebuf failed", errno);
+        }
 
-	ebuf.length = rbytes;
-	// Close the error stream
-	stream_->error_.reset();
+        ebuf.length = rbytes;
+        // Close the error stream
+        stream_->error_.reset();
       }
       return std::make_pair(std::move(obuf), std::move(ebuf));
     }
@@ -1467,7 +1466,7 @@ namespace detail {
   }
 
 
-  std::pair<OutBuffer, ErrBuffer>
+  inline std::pair<OutBuffer, ErrBuffer>
   Communication::communicate_threaded(const char* msg, size_t length)
   {
     OutBuffer obuf;
@@ -1492,12 +1491,12 @@ namespace detail {
     }
     if (stream_->input()) {
       if (msg) {
-	int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-	if (wbytes < length) {
-	  if (errno != EPIPE && errno != EINVAL) {
-	    throw OSError("fwrite error", errno);
-	  }
-	}
+        int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
+        if (wbytes < length) {
+          if (errno != EPIPE && errno != EINVAL) {
+            throw OSError("fwrite error", errno);
+          }
+        }
       }
       stream_->input_.reset();
     }
@@ -1544,12 +1543,15 @@ namespace detail
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
 
-  void pipeline_impl(std::vector<Popen>& cmds) { /* EMPTY IMPL */ }
+  static inline void pipeline_impl(std::vector<Popen>& cmds)
+  {
+    /* EMPTY IMPL */
+  }
 
   template<typename... Args>
-  void pipeline_impl(std::vector<Popen>& cmds,
-                     const std::string& cmd,
-                     Args&&... args)
+  static inline void pipeline_impl(std::vector<Popen>& cmds,
+                                   const std::string& cmd,
+                                   Args&&... args)
   {
     if (cmds.size() == 0) {
       cmds.emplace_back(cmd, output{PIPE}, defer_spawn{true});
