@@ -1040,19 +1040,19 @@ private:
   int retcode_ = -1;
 };
 
-void Popen::init_args() {
+inline void Popen::init_args() {
   populate_c_argv();
 }
 
 template <typename F, typename... Args>
-void Popen::init_args(F&& farg, Args&&... args)
+inline void Popen::init_args(F&& farg, Args&&... args)
 {
   detail::ArgumentDeducer argd(this);
   argd.set_option(std::forward<F>(farg));
   init_args(std::forward<Args>(args)...);
 }
 
-void Popen::populate_c_argv()
+inline void Popen::populate_c_argv()
 {
   cargv_.clear();
   cargv_.reserve(vargs_.size() + 1);
@@ -1060,7 +1060,7 @@ void Popen::populate_c_argv()
   cargv_.push_back(nullptr);
 }
 
-void Popen::start_process() throw (CalledProcessError, OSError)
+inline void Popen::start_process() throw (CalledProcessError, OSError)
 {
   // The process was started/tried to be started
   // in the constructor itself.
@@ -1074,7 +1074,7 @@ void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-int Popen::wait() throw (OSError)
+inline int Popen::wait() throw (OSError)
 {
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
@@ -1089,7 +1089,7 @@ int Popen::wait() throw (OSError)
   return 0;
 }
 
-int Popen::poll() throw (OSError)
+inline int Popen::poll() throw (OSError)
 {
   int status;
   if (!child_created_) return -1; // TODO: ??
@@ -1124,14 +1124,14 @@ int Popen::poll() throw (OSError)
   return retcode_;
 }
 
-void Popen::kill(int sig_num)
+inline void Popen::kill(int sig_num)
 {
   if (session_leader_) killpg(child_pid_, sig_num);
   else ::kill(child_pid_, sig_num);
 }
 
 
-void Popen::execute_process() throw (CalledProcessError, OSError)
+inline void Popen::execute_process() throw (CalledProcessError, OSError)
 {
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
@@ -1210,45 +1210,45 @@ void Popen::execute_process() throw (CalledProcessError, OSError)
 
 namespace detail {
 
-  void ArgumentDeducer::set_option(executable&& exe) {
+  inline void ArgumentDeducer::set_option(executable&& exe) {
     popen_->exe_name_ = std::move(exe.arg_value);
   }
 
-  void ArgumentDeducer::set_option(cwd&& cwdir) {
+  inline void ArgumentDeducer::set_option(cwd&& cwdir) {
     popen_->cwd_ = std::move(cwdir.arg_value);
   }
 
-  void ArgumentDeducer::set_option(bufsize&& bsiz) {
+  inline void ArgumentDeducer::set_option(bufsize&& bsiz) {
     popen_->stream_.bufsiz_ = bsiz.bufsiz;
   }
 
-  void ArgumentDeducer::set_option(environment&& env) {
+  inline void ArgumentDeducer::set_option(environment&& env) {
     popen_->env_ = std::move(env.env_);
   }
 
-  void ArgumentDeducer::set_option(defer_spawn&& defer) {
+  inline void ArgumentDeducer::set_option(defer_spawn&& defer) {
     popen_->defer_process_start_ = defer.defer;
   }
 
-  void ArgumentDeducer::set_option(shell&& sh) {
+  inline void ArgumentDeducer::set_option(shell&& sh) {
     popen_->shell_ = sh.shell_;
   }
 
-  void ArgumentDeducer::set_option(session_leader&& sleader) {
+  inline void ArgumentDeducer::set_option(session_leader&& sleader) {
     popen_->session_leader_ = sleader.leader_;
   }
 
-  void ArgumentDeducer::set_option(input&& inp) {
+  inline void ArgumentDeducer::set_option(input&& inp) {
     if (inp.rd_ch_ != -1) popen_->stream_.read_from_parent_ = inp.rd_ch_;
     if (inp.wr_ch_ != -1) popen_->stream_.write_to_child_ = inp.wr_ch_;
   }
 
-  void ArgumentDeducer::set_option(output&& out) {
+  inline void ArgumentDeducer::set_option(output&& out) {
     if (out.wr_ch_ != -1) popen_->stream_.write_to_parent_ = out.wr_ch_;
     if (out.rd_ch_ != -1) popen_->stream_.read_from_child_ = out.rd_ch_;
   }
 
-  void ArgumentDeducer::set_option(error&& err) {
+  inline void ArgumentDeducer::set_option(error&& err) {
     if (err.deferred_) {
       if (popen_->stream_.write_to_parent_) {
         popen_->stream_.err_write_ = popen_->stream_.write_to_parent_;
@@ -1260,17 +1260,17 @@ namespace detail {
     if (err.rd_ch_ != -1) popen_->stream_.err_read_ = err.rd_ch_;
   }
 
-  void ArgumentDeducer::set_option(close_fds&& cfds) {
+  inline void ArgumentDeducer::set_option(close_fds&& cfds) {
     popen_->close_fds_ = cfds.close_all;
   }
 
-  void ArgumentDeducer::set_option(preexec_func&& prefunc) {
+  inline void ArgumentDeducer::set_option(preexec_func&& prefunc) {
     popen_->preexec_fn_ = std::move(prefunc);
     popen_->has_preexec_fn_ = true;
   }
 
 
-  void Child::execute_child() {
+  inline void Child::execute_child() {
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
@@ -1367,7 +1367,7 @@ namespace detail {
   }
 
 
-  void Streams::setup_comm_channels()
+  inline void Streams::setup_comm_channels()
   {
     if (write_to_child_ != -1)  input(fdopen(write_to_child_, "wb"));
     if (read_from_child_ != -1) output(fdopen(read_from_child_, "rb"));
@@ -1390,18 +1390,18 @@ namespace detail {
     }
   }
 
-  int Communication::send(const char* msg, size_t length)
+  inline int Communication::send(const char* msg, size_t length)
   {
     if (stream_->input() == nullptr) return -1;
     return std::fwrite(msg, sizeof(char), length, stream_->input());
   }
 
-  int Communication::send(const std::vector<char>& msg)
+  inline int Communication::send(const std::vector<char>& msg)
   {
     return send(msg.data(), msg.size());
   }
 
-  std::pair<OutBuffer, ErrBuffer>
+  inline std::pair<OutBuffer, ErrBuffer>
   Communication::communicate(const char* msg, size_t length)
   {
     // Optimization from subprocess.py
@@ -1466,7 +1466,7 @@ namespace detail {
   }
 
 
-  std::pair<OutBuffer, ErrBuffer>
+  inline std::pair<OutBuffer, ErrBuffer>
   Communication::communicate_threaded(const char* msg, size_t length)
   {
     OutBuffer obuf;
@@ -1543,12 +1543,12 @@ namespace detail
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
 
-  void pipeline_impl(std::vector<Popen>& cmds) { /* EMPTY IMPL */ }
+  static void pipeline_impl(std::vector<Popen>& cmds) { /* EMPTY IMPL */ }
 
   template<typename... Args>
-  void pipeline_impl(std::vector<Popen>& cmds,
-                     const std::string& cmd,
-                     Args&&... args)
+  static void pipeline_impl(std::vector<Popen>& cmds,
+                            const std::string& cmd,
+                            Args&&... args)
   {
     if (cmds.size() == 0) {
       cmds.emplace_back(cmd, output{PIPE}, defer_spawn{true});
