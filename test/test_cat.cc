@@ -19,7 +19,7 @@ void test_cat_file_redirection()
   auto p = sp::Popen({"cat", "-"}, sp::input{sp::PIPE}, sp::output{"cat_fredirect.txt"});
   auto msg = "through stdin to stdout";
   int wr_bytes = p.send(msg, strlen(msg));
-  assert (wr_bytes == strlen(msg));
+  assert (wr_bytes == (int)strlen(msg));
   std::cout << "END_TEST" << std::endl;
 }
 

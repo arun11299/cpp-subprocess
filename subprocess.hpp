@@ -246,7 +246,7 @@ namespace util
   static inline
   int write_n(int fd, const char* buf, size_t length)
   {
-    int nwritten = 0;
+    size_t nwritten = 0;
     while (nwritten < length) {
       int written = write(fd, buf + nwritten, length - nwritten);
       if (written == -1) return -1;
@@ -311,7 +311,7 @@ namespace util
   static inline int read_all(int fd, Buffer& buf)
   {
     size_t orig_size = buf.size();
-    size_t increment = orig_size;
+    int increment = orig_size;
     auto buffer = buf.data();
     int total_bytes_read = 0;
 
@@ -1409,6 +1409,7 @@ namespace detail {
     // at all, using select() or threads is unnecessary.
     auto hndls = {stream_->input(), stream_->output(), stream_->error()};
     int count = std::count(std::begin(hndls), std::end(hndls), nullptr);
+    const int len_conv = length;
 
     if (count >= 2) {
       OutBuffer obuf;
@@ -1416,7 +1417,7 @@ namespace detail {
       if (stream_->input()) {
         if (msg) {
           int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-          if (wbytes < length) {
+          if (wbytes < len_conv) {
             if (errno != EPIPE && errno != EINVAL) {
               throw OSError("fwrite error", errno);
             }
@@ -1472,6 +1473,7 @@ namespace detail {
     OutBuffer obuf;
     ErrBuffer ebuf;
     std::future<int> out_fut, err_fut;
+    const int length_conv = length;
 
     if (stream_->output()) {
       obuf.add_cap(out_buf_cap_);
@@ -1492,7 +1494,7 @@ namespace detail {
     if (stream_->input()) {
       if (msg) {
         int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-        if (wbytes < length) {
+        if (wbytes < length_conv) {
           if (errno != EPIPE && errno != EINVAL) {
             throw OSError("fwrite error", errno);
           }
