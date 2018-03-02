@@ -1150,11 +1150,6 @@ inline void Popen::execute_process() throw (CalledProcessError, OSError)
   }
   exe_name_ = vargs_[0];
 
-  std::signal(SIGCHLD, [](int sig){
-    int status;
-    waitpid(-1, &status, WNOHANG);
-  });
-
   child_pid_ = fork();
 
   if (child_pid_ < 0) {
