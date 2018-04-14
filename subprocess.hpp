@@ -986,14 +986,14 @@ public:
   std::pair<OutBuffer, ErrBuffer> communicate(const char* msg, size_t length)
   {
     auto res = stream_.communicate(msg, length);
-    wait();
+    retcode_ = wait();
     return res;
   }
 
   std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   {
     auto res = stream_.communicate(msg);
-    wait();
+    retcode_ = wait();
     return res;
   }
 
