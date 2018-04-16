@@ -277,7 +277,7 @@ namespace util
     int eintr_cnter = 0;
 
     while (1) {
-      int read_bytes = read(fd, buf, read_upto);
+      int read_bytes = read(fd, buf + rbytes, read_upto - rbytes);
       if (read_bytes == -1) {
         if (errno == EINTR) {
           if (eintr_cnter >= 50) return -1;
@@ -322,11 +322,15 @@ namespace util
         orig_size = orig_size * 1.5;
         increment = orig_size - buf.size();
         buf.resize(orig_size);
+        //update the buffer pointer
+        buffer = buf.data();
         buffer += rd_bytes;
         total_bytes_read += rd_bytes;
+
       } else if (rd_bytes != -1) {
         total_bytes_read += rd_bytes;
         break;
+
       } else {
         if (total_bytes_read == 0) return -1;
         break;
@@ -1423,12 +1427,12 @@ namespace detail {
       } else if (stream_->output()) {
         // Read till EOF
         // ATTN: This could be blocking, if the process
-        // at the other end screws up, we get screwed up as well
+        // at the other end screws up, we get screwed as well
         obuf.add_cap(out_buf_cap_);
 
         int rbytes = util::read_all(
-                                  fileno(stream_->output()),
-                                  obuf.buf);
+                            fileno(stream_->output()),
+                            obuf.buf);
 
         if (rbytes == -1) {
           throw OSError("read to obuf failed", errno);
