@@ -310,29 +310,31 @@ namespace util
   // Requires Buffer to be of type class Buffer
   static inline int read_all(int fd, Buffer& buf)
   {
-    size_t orig_size = buf.size();
-    int increment = orig_size;
     auto buffer = buf.data();
     int total_bytes_read = 0;
+    int fill_sz = buf.size();
 
     while (1) {
-      int rd_bytes = read_atmost_n(fd, buffer, buf.size());
-      if (rd_bytes == increment) {
-        // Resize the buffer to accomodate more
-        orig_size = orig_size * 1.5;
-        increment = orig_size - buf.size();
-        buf.resize(orig_size);
+      const int rd_bytes = read_atmost_n(fd, buffer, fill_sz);
+
+      if (rd_bytes == -1) { // Read finished
+        if (total_bytes_read == 0) return -1;
+        break;
+
+      } else if (rd_bytes == fill_sz) { // Buffer full
+        const auto orig_sz = buf.size();
+        const auto new_sz = orig_sz * 2;
+        buf.resize(new_sz);
+        fill_sz = new_sz - orig_sz;
+
         //update the buffer pointer
         buffer = buf.data();
         buffer += rd_bytes;
         total_bytes_read += rd_bytes;
 
-      } else if (rd_bytes != -1) {
+      } else { // Partial data ? Continue reading
         total_bytes_read += rd_bytes;
-        break;
-
-      } else {
-        if (total_bytes_read == 0) return -1;
+        fill_sz -= rd_bytes;
         break;
       }
     }
