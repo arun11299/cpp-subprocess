@@ -608,7 +608,7 @@ public:
   preexec_func() {}
 
   template <typename Func>
-  preexec_func(Func f): holder_(new FuncHolder<Func>(f))
+  preexec_func(Func f): holder_(new FuncHolder<Func>(std::move(f)))
   {}
 
   void operator()() {
@@ -621,8 +621,8 @@ private:
   };
   template <typename T>
   struct FuncHolder: HolderBase {
-    FuncHolder(T func): func_(func) {}
-    void operator()() const override {}
+    FuncHolder(T func): func_(std::move(func)) {}
+    void operator()() const override { func_(); }
     // The function pointer/reference
     T func_;
   };
