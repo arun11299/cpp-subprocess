@@ -23,6 +23,24 @@ void test_cat_file_redirection()
   std::cout << "END_TEST" << std::endl;
 }
 
+void test_cat_send_terminate()
+{
+  std::cout << "Test::test_cat_send_terminate" << std::endl;
+  std::vector<sp::Popen> pops;
+
+  for (int i=0; i < 5; i++) {
+    pops.emplace_back(sp::Popen({"cat", "-"}, sp::input{sp::PIPE}));
+    pops[i].send("3 5\n", 5);
+    pops[i].close_input();
+  }
+
+  for (int i=0; i < 5; i++) {
+    pops[i].wait();
+  }
+
+  std::cout << "END_TEST" << std::endl;
+}
+
 void test_buffer_growth()
 {
   auto obuf = sp::check_output({"cat", "../subprocess.hpp"});
@@ -40,9 +58,12 @@ void test_buffer_growth_threaded_comm()
 }
 
 int main() {
-  test_cat_pipe_redirection();
+  // test_cat_pipe_redirection();
+  test_cat_send_terminate();
+  /*
   test_cat_file_redirection();
   test_buffer_growth();
   test_buffer_growth_threaded_comm();
+  */
   return 0;
 }

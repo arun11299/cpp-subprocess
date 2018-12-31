@@ -1012,6 +1012,11 @@ public:
   FILE* output() { return stream_.output();}
   FILE* error()  { return stream_.error(); }
 
+  /// Stream close APIs
+  void close_input()  { stream_.input_.reset();  }
+  void close_output() { stream_.output_.reset(); }
+  void close_error()  { stream_.error_.reset();  }
+
 private:
   template <typename F, typename... Args>
   void init_args(F&& farg, Args&&... args);
