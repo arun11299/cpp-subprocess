@@ -217,7 +217,7 @@ namespace util
    *         Second element is the write descriptor of pipe.
    */
   static inline
-  std::pair<int, int> pipe_cloexec() throw (OSError)
+  std::pair<int, int> pipe_cloexec() noexcept(false)
   {
     int pipe_fds[2];
     int res = pipe(pipe_fds);
@@ -608,7 +608,7 @@ public:
   preexec_func() {}
 
   template <typename Func>
-  preexec_func(Func f): holder_(new FuncHolder<Func>(f))
+  preexec_func(Func f): holder_(new FuncHolder<Func>(std::move(f)))
   {}
 
   void operator()() {
@@ -621,8 +621,8 @@ private:
   };
   template <typename T>
   struct FuncHolder: HolderBase {
-    FuncHolder(T func): func_(func) {}
-    void operator()() const override {}
+    FuncHolder(T func): func_(std::move(func)) {}
+    void operator()() const override { func_(); }
     // The function pointer/reference
     T func_;
   };
@@ -965,15 +965,15 @@ public:
     if (!defer_process_start_) execute_process();
   }
 
-  void start_process() throw (CalledProcessError, OSError);
+  void start_process() noexcept(false);
 
   int pid() const noexcept { return child_pid_; }
 
   int retcode() const noexcept { return retcode_; }
 
-  int wait() throw(OSError);
+  int wait() noexcept(false);
 
-  int poll() throw(OSError);
+  int poll() noexcept(false);
 
   // Does not fail, Caller is expected to recheck the
   // status with a call to poll()
@@ -1022,7 +1022,7 @@ private:
   void init_args(F&& farg, Args&&... args);
   void init_args();
   void populate_c_argv();
-  void execute_process() throw (CalledProcessError, OSError);
+  void execute_process() noexcept(false);
 
 private:
   detail::Streams stream_;
@@ -1071,7 +1071,7 @@ inline void Popen::populate_c_argv()
   cargv_.push_back(nullptr);
 }
 
-inline void Popen::start_process() throw (CalledProcessError, OSError)
+inline void Popen::start_process() noexcept(false)
 {
   // The process was started/tried to be started
   // in the constructor itself.
@@ -1085,7 +1085,7 @@ inline void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-inline int Popen::wait() throw (OSError)
+inline int Popen::wait() noexcept(false)
 {
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
@@ -1100,7 +1100,7 @@ inline int Popen::wait() throw (OSError)
   return 0;
 }
 
-inline int Popen::poll() throw (OSError)
+inline int Popen::poll() noexcept(false)
 {
   int status;
   if (!child_created_) return -1; // TODO: ??
@@ -1142,7 +1142,7 @@ inline void Popen::kill(int sig_num)
 }
 
 
-inline void Popen::execute_process() throw (CalledProcessError, OSError)
+inline void Popen::execute_process() noexcept(false)
 {
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
