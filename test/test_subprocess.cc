@@ -64,7 +64,16 @@ void test_read_all()
   std::cout<<"read_all() succeeded"<<std::endl;
 }
 
+void test_simple_cmd()
+{
+  auto p = Popen({"ls", "-l"}, output{PIPE});
+  auto obuf = p.communicate().first;
+  std::cout << "Data : " << obuf.buf.data() << std::endl;
+  std::cout << "Data len: " << obuf.length << std::endl;
+}
+
 int main() {
+  /*
   test_exename();
   test_input();
   test_piping();
@@ -72,5 +81,7 @@ int main() {
   test_shell();
   test_sleep();
   test_read_all();
+  */
+  test_simple_cmd();
   return 0;
 }
