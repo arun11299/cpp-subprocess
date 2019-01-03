@@ -306,9 +306,8 @@ namespace util
    *
    * NOTE: `class Buffer` is a exposed public class. See below.
    */
-  template <typename Buffer>
-  // Requires Buffer to be of type class Buffer
-  static inline int read_all(int fd, Buffer& buf)
+
+  static inline int read_all(int fd, std::vector<char>& buf)
   {
     auto buffer = buf.data();
     int total_bytes_read = 0;
@@ -329,8 +328,8 @@ namespace util
 
         //update the buffer pointer
         buffer = buf.data();
-        buffer += rd_bytes;
         total_bytes_read += rd_bytes;
+        buffer += total_bytes_read;
 
       } else { // Partial data ? Continue reading
         total_bytes_read += rd_bytes;
@@ -338,6 +337,7 @@ namespace util
         break;
       }
     }
+    buf.erase(buf.begin()+total_bytes_read, buf.end()); // remove extra nulls
     return total_bytes_read;
   }
 
