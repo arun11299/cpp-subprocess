@@ -1208,7 +1208,7 @@ inline void Popen::execute_process() noexcept(false)
       }
     } catch (std::exception& exp) {
       stream_.cleanup_fds();
-      throw exp;
+      throw;
     }
 
   }
@@ -1364,7 +1364,7 @@ namespace detail {
       std::string err_msg(exp.what());
       //ATTN: Can we do something on error here ?
       util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
-      throw exp;
+      throw;
     }
 
     // Calling application would not get this
