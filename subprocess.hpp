@@ -618,6 +618,7 @@ public:
 private:
   struct HolderBase {
     virtual void operator()() const = 0;
+    virtual ~HolderBase(){};
   };
   template <typename T>
   struct FuncHolder: HolderBase {
