@@ -1,19 +1,27 @@
-#include <iostream>
 #include "../subprocess.hpp"
+#include <iostream>
 
 using namespace subprocess;
 
 void test_exename()
 {
+#ifdef _MSC_VER
+  auto ret = call({"--version"}, executable{"cmake"}, shell{false});
+#else
   auto ret = call({"-l"}, executable{"ls"}, shell{false});
+#endif
   std::cout << ret << std::endl;
 }
 
 void test_input()
 {
+#if 0
+  auto p = Popen({"cmake", "--version"}, output{PIPE}, input{PIPE});
+#else
   auto p = Popen({"grep", "f"}, output{PIPE}, input{PIPE});
-  const char* msg = "one\ntwo\nthree\nfour\nfive\n";
+  const char *msg = "one\ntwo\nthree\nfour\nfive\n";
   p.send(msg, strlen(msg));
+#endif
   auto res = p.communicate(nullptr, 0);
   std::cout << res.first.buf.data() << std::endl;
 }
@@ -22,7 +30,8 @@ void test_piping()
 {
   auto cat = Popen({"cat", "../subprocess.hpp"}, output{PIPE});
   auto grep = Popen({"grep", "template"}, input{cat.output()}, output{PIPE});
-  auto cut = Popen({"cut", "-d,", "-f", "1"}, input{grep.output()}, output{PIPE});
+  auto cut =
+      Popen({"cut", "-d,", "-f", "1"}, input{grep.output()}, output{PIPE});
   auto res = cut.communicate().first;
   std::cout << res.buf.data() << std::endl;
 }
@@ -45,7 +54,10 @@ void test_sleep()
 
   while (p.poll() == -1) {
     std::cout << "Waiting..." << std::endl;
+#ifdef _MSC_VER
+#else
     sleep(1);
+#endif
   }
 
   std::cout << "Sleep ended: ret code = " << p.retcode() << std::endl;
