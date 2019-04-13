@@ -68,7 +68,7 @@ void test_read_all()
   Popen p = Popen({"echo","12345678"}, output{PIPE});
   
   std::vector<char> buf(6);
-  int rbytes = util::read_all(fileno(p.output()), buf);
+  int rbytes = util::read_all(p.output(), buf);
 
   std::string out(buf.begin(), buf.end());
 
