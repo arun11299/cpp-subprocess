@@ -1,51 +1,19 @@
-add_executable(test_subprocess test_subprocess.cc)
+set(test_names test_subprocess test_cat test_env test_err_redirection test_split test_main test_ret_code)
+set(test_files env_script.sh write_err.sh write_err.txt)
 
-add_test(
-    NAME test_subprocess
-    COMMAND $<TARGET_FILE:test_subprocess>
-)
+foreach(test_name IN LISTS test_names)
+    add_executable(${test_name} ${test_name}.cc)
 
-add_executable(test_cat test_cat.cc)
+    add_test(
+        NAME ${test_name}
+        COMMAND $<TARGET_FILE:${test_name}>
+    )    
+endforeach()
 
-add_test(
-    NAME test_cat
-    COMMAND $<TARGET_FILE:test_cat>
-)
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/env_script.sh ${CMAKE_CURRENT_BINARY_DIR}/env_script.sh COPYONLY)
-add_executable(test_env test_env.cc)
-
-add_test(
-    NAME test_env
-    COMMAND $<TARGET_FILE:test_env>
-)
-
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/write_err.sh ${CMAKE_CURRENT_BINARY_DIR}/write_err.sh COPYONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/write_err.txt ${CMAKE_CURRENT_BINARY_DIR}/write_err.txt COPYONLY)
-add_executable(test_err_redirection test_err_redirection.cc)
-
-add_test(
-    NAME test_err_redirection
-    COMMAND $<TARGET_FILE:test_err_redirection>
-)
-
-add_executable(test_split test_split.cc)
-
-add_test(
-    NAME test_split
-    COMMAND $<TARGET_FILE:test_split>
-)
-
-add_executable(test_main test.cc)
-
-add_test(
-    NAME test_main
-    COMMAND $<TARGET_FILE:test_main>
-)
-
-add_executable(test_ret_code test_ret_code.cc)
-
-add_test(
-    NAME test_ret_code
-    COMMAND $<TARGET_FILE:test_ret_code>
-)
+foreach(test_file IN LISTS test_files)
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/${test_file}
+        ${CMAKE_CURRENT_BINARY_DIR}/${test_file}
+        COPYONLY
+    )
+endforeach()
