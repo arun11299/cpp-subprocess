@@ -259,6 +259,24 @@ namespace util
 
     return fp;
   }
+
+  void configure_pipe(HANDLE* read_handle, HANDLE* write_handle, HANDLE* child_handle)
+  {
+    SECURITY_ATTRIBUTES saAttr;
+
+    // Set the bInheritHandle flag so pipe handles are inherited.
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+    saAttr.lpSecurityDescriptor = NULL;
+
+    // Create a pipe for the child process's STDIN.
+    if (!CreatePipe(read_handle, write_handle, &saAttr,0))
+      throw OSError("Stdin CreatePipe", 0);
+
+    // Ensure the write handle to the pipe for STDIN is not inherited.
+    if (!SetHandleInformation(child_handle, HANDLE_FLAG_INHERIT, 0))
+      throw OSError("Stdin SetHandleInformation", 0);
+  }
 #endif
 
   /*!
@@ -1019,6 +1037,15 @@ public:// Yes they are public
   std::shared_ptr<FILE> output_ = nullptr;
   std::shared_ptr<FILE> error_  = nullptr;
 
+#ifdef _MSC_VER
+  HANDLE g_hChildStd_IN_Rd = nullptr;
+  HANDLE g_hChildStd_IN_Wr = nullptr;
+  HANDLE g_hChildStd_OUT_Rd = nullptr;
+  HANDLE g_hChildStd_OUT_Wr = nullptr;
+  HANDLE g_hChildStd_ERR_Rd = nullptr;
+  HANDLE g_hChildStd_ERR_Wr = nullptr;
+#endif
+
   // Buffer size for the IO streams
   int bufsiz_ = 0;
 
@@ -1621,6 +1648,20 @@ namespace detail {
 
   inline void Streams::setup_comm_channels()
   {
+#ifdef _MSC_VER
+    util::configure_pipe(this->g_hChildStd_IN_Rd, &this->g_hChildStd_IN_Wr, &this->g_hChildStd_IN_Wr);
+    this->input(util::file_from_handle(this->g_hChildStd_IN_Wr, "w"));
+    this->write_to_child_ = _fileno(this->input());
+
+    util::configure_pipe(&this->g_hChildStd_OUT_Rd, &this->g_hChildStd_OUT_Wr, &this->g_hChildStd_OUT_Rd);
+    this->output(util::file_from_handle(this->g_hChildStd_OUT_Rd, "r"));
+    this->read_from_child_ = _fileno(this->output());
+
+    util::configure_pipe(&this->g_hChildStd_ERR_Rd, &this->g_hChildStd_ERR_Wr, &this->g_hChildStd_ERR_Rd);
+    this->error(util::file_from_handle(this->g_hChildStd_ERR_Rd, "r"));
+    this->err_read_ = _fileno(this->error());
+#else
+
     if (write_to_child_ != -1)  input(fdopen(write_to_child_, "wb"));
     if (read_from_child_ != -1) output(fdopen(read_from_child_, "rb"));
     if (err_read_ != -1)        error(fdopen(err_read_, "rb"));
@@ -1640,6 +1681,7 @@ namespace detail {
         setvbuf(h, nullptr, _IOFBF, bufsiz_);
       };
     }
+  #endif
   }
 
   inline int Communication::send(const char* msg, size_t length)
