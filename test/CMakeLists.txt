@@ -20,6 +20,8 @@ add_test(
     COMMAND $<TARGET_FILE:test_env>
 )
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/write_err.sh ${CMAKE_CURRENT_BINARY_DIR}/write_err.sh COPYONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/write_err.txt ${CMAKE_CURRENT_BINARY_DIR}/write_err.txt COPYONLY)
 add_executable(test_err_redirection test_err_redirection.cc)
 
 add_test(
@@ -41,3 +43,9 @@ add_test(
     COMMAND $<TARGET_FILE:test_main>
 )
 
+add_executable(test_ret_code test_ret_code.cc)
+
+add_test(
+    NAME test_ret_code
+    COMMAND $<TARGET_FILE:test_ret_code>
+)
