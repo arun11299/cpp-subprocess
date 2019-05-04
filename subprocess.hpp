@@ -50,11 +50,20 @@ Documentation for C++ subprocessing libraray.
 #include <initializer_list>
 #include <exception>
 
+#include <locale>
+#include <codecvt>
+#include <future>
+
 extern "C" {
+#ifdef _MSC_VER
+  #include <Windows.h>
+  #include <io.h>
+#else
+  #include <sys/wait.h>
   #include <unistd.h>
+#endif
   #include <fcntl.h>
   #include <sys/types.h>
-  #include <sys/wait.h>
   #include <signal.h>
 }
 
@@ -136,6 +145,120 @@ public:
 
 namespace util
 {
+  template <typename R> bool is_ready(std::shared_future<R> const &f)
+  {
+    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+  }
+
+  void quote_argument(const std::wstring &argument, std::wstring &command_line,
+                      bool force)
+  {
+    //
+    // Unless we're told otherwise, don't quote unless we actually
+    // need to do so --- hopefully avoid problems if programs won't
+    // parse quotes properly
+    //
+
+    if (force == false && argument.empty() == false &&
+        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
+      command_line.append(argument);
+    }
+    else {
+      command_line.push_back(L'"');
+
+      for (auto it = argument.begin();; ++it) {
+        unsigned number_backslashes = 0;
+
+        while (it != argument.end() && *it == L'\\') {
+          ++it;
+          ++number_backslashes;
+        }
+
+        if (it == argument.end()) {
+
+          //
+          // Escape all backslashes, but let the terminating
+          // double quotation mark we add below be interpreted
+          // as a metacharacter.
+          //
+
+          command_line.append(number_backslashes * 2, L'\\');
+          break;
+        }
+        else if (*it == L'"') {
+
+          //
+          // Escape all backslashes and the following
+          // double quotation mark.
+          //
+
+          command_line.append(number_backslashes * 2 + 1, L'\\');
+          command_line.push_back(*it);
+        }
+        else {
+
+          //
+          // Backslashes aren't special here.
+          //
+
+          command_line.append(number_backslashes, L'\\');
+          command_line.push_back(*it);
+        }
+      }
+
+      command_line.push_back(L'"');
+    }
+  }
+
+#ifdef _MSC_VER
+  std::string get_last_error()
+  {
+    DWORD errorMessageID = ::GetLastError();
+    if (errorMessageID == 0)
+      return std::string();
+
+    LPSTR messageBuffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&messageBuffer, 0, NULL);
+
+    std::string message(messageBuffer, size);
+
+    LocalFree(messageBuffer);
+
+    return message;
+  }
+
+  FILE *file_from_handle(HANDLE h, const char *mode)
+  {
+    int md;
+    if (mode == "w") {
+      md = _O_WRONLY;
+    }
+    else if (mode == "r") {
+      md = _O_RDONLY;
+    }
+    else {
+      throw OSError("file_from_handle", 0);
+    }
+
+    int os_fhandle = _open_osfhandle((intptr_t)h, md);
+    if (os_fhandle == -1) {
+      CloseHandle(h);
+      throw OSError("_open_osfhandle", 0);
+    }
+
+    FILE *fp = _fdopen(os_fhandle, mode);
+    if (fp == 0) {
+      _close(os_fhandle);
+      throw OSError("_fdopen", 0);
+    }
+
+    return fp;
+  }
+#endif
 
   /*!
    * Function: split
