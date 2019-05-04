@@ -383,9 +383,9 @@ namespace util
   /*!
    * Function: read_atmost_n
    * Reads at the most `read_upto` bytes from the
-   * file descriptor `fd` before returning.
+   * file object `fp` before returning.
    * Parameters:
-   * [in] fd : The file descriptor from which it needs to read.
+   * [in] fp : The file object from which it needs to read.
    * [in] buf : The buffer into which it needs to write the data.
    * [in] read_upto: Max number of bytes which must be read from `fd`.
    * [out] int : Number of bytes written to `buf` or read from `fd`
@@ -395,8 +395,12 @@ namespace util
    *  reaches 50 after which it will return with whatever data it read.
    */
   static inline
-  int read_atmost_n(int fd, char* buf, size_t read_upto)
+  int read_atmost_n(FILE* fp, char* buf, size_t read_upto)
   {
+#ifdef _MSC_VER
+    return (int)fread(buf, 1, read_upto, fp);
+#else
+    int fd = fileno(fp);
     int rbytes = 0;
     int eintr_cnter = 0;
 
@@ -415,6 +419,7 @@ namespace util
       rbytes += read_bytes;
     }
     return rbytes;
+#endif
   }
 
 
@@ -438,7 +443,7 @@ namespace util
     int fill_sz = buf.size();
 
     while (1) {
-      const int rd_bytes = read_atmost_n(fd, buffer, fill_sz);
+      const int rd_bytes = read_atmost_n(fdopen(fd, "r"), buffer, fill_sz);
 
       if (rd_bytes == -1) { // Read finished
         if (total_bytes_read == 0) return -1;
@@ -1317,7 +1322,7 @@ inline void Popen::execute_process() noexcept(false)
       char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
 
       int read_bytes = util::read_atmost_n(
-                                  err_rd_pipe,
+                                  fdopen(err_rd_pipe, "r"),
                                   err_buf,
                                   SP_MAX_ERR_BUF_SIZ);
       close(err_rd_pipe);
@@ -1579,7 +1584,7 @@ namespace detail {
         ebuf.add_cap(err_buf_cap_);
 
         int rbytes = util::read_atmost_n(
-                                  fileno(stream_->error()),
+                                  stream_->error(),
                                   ebuf.buf.data(),
                                   ebuf.buf.size());
 
