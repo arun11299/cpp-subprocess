@@ -49,10 +49,11 @@ Documentation for C++ subprocessing libraray.
 #include <memory>
 #include <initializer_list>
 #include <exception>
-
 #include <locale>
-#include <codecvt>
-#include <future>
+
+#ifdef _MSC_VER
+  #include <codecvt>
+#endif
 
 extern "C" {
 #ifdef _MSC_VER
