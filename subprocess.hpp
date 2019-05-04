@@ -425,10 +425,10 @@ namespace util
 
   /*!
    * Function: read_all
-   * Reads all the available data from `fd` into
+   * Reads all the available data from `fp` into
    * `buf`. Internally calls read_atmost_n.
    * Parameters:
-   * [in] fd : The file descriptor from which to read from.
+   * [in] fp : The file object from which to read from.
    * [in] buf : The buffer of type `class Buffer` into which
    *            the read data is written to.
    * [out] int: Number of bytes read OR -1 in case of failure.
@@ -436,14 +436,14 @@ namespace util
    * NOTE: `class Buffer` is a exposed public class. See below.
    */
 
-  static inline int read_all(int fd, std::vector<char>& buf)
+  static inline int read_all(FILE* fp, std::vector<char>& buf)
   {
     auto buffer = buf.data();
     int total_bytes_read = 0;
     int fill_sz = buf.size();
 
     while (1) {
-      const int rd_bytes = read_atmost_n(fdopen(fd, "r"), buffer, fill_sz);
+      const int rd_bytes = read_atmost_n(fp, buffer, fill_sz);
 
       if (rd_bytes == -1) { // Read finished
         if (total_bytes_read == 0) return -1;
@@ -1568,7 +1568,7 @@ namespace detail {
         obuf.add_cap(out_buf_cap_);
 
         int rbytes = util::read_all(
-                            fileno(stream_->output()),
+                            stream_->output(),
                             obuf.buf);
 
         if (rbytes == -1) {
@@ -1616,7 +1616,7 @@ namespace detail {
 
       out_fut = std::async(std::launch::async,
                           [&obuf, this] {
-                            return util::read_all(fileno(this->stream_->output()), obuf.buf);
+                            return util::read_all(this->stream_->output(), obuf.buf);
                           });
     }
     if (stream_->error()) {
@@ -1624,7 +1624,7 @@ namespace detail {
 
       err_fut = std::async(std::launch::async,
                           [&ebuf, this] {
-                            return util::read_all(fileno(this->stream_->error()), ebuf.buf);
+                            return util::read_all(this->stream_->error(), ebuf.buf);
                           });
     }
     if (stream_->input()) {
