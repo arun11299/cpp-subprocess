@@ -490,7 +490,7 @@ namespace util
     return total_bytes_read;
   }
 
-
+#ifndef _MSC_VER
   /*!
    * Function: wait_for_child_exit
    * Waits for the process with pid `pid` to exit
@@ -518,7 +518,7 @@ namespace util
 
     return std::make_pair(ret, status);
   }
-
+#endif
 
 }; // end namespace util
 
@@ -1256,6 +1256,11 @@ inline void Popen::start_process() noexcept(false)
 
 inline int Popen::wait() noexcept(false)
 {
+#ifdef _MSC_VER
+  int ret = WaitForSingleObject(process_handle_, INFINITE);
+
+  return 0;
+#else
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
   if (ret == -1) {
@@ -1267,6 +1272,7 @@ inline int Popen::wait() noexcept(false)
   else return 255;
 
   return 0;
+#endif
 }
 
 inline int Popen::poll() noexcept(false)
@@ -1322,8 +1328,14 @@ inline int Popen::poll() noexcept(false)
 
 inline void Popen::kill(int sig_num)
 {
+#ifdef _MSC_VER
+  if (!TerminateProcess(this->process_handle_, (UINT)sig_num)) {
+    throw OSError("TerminateProcess", 0);
+  }
+#else
   if (session_leader_) killpg(child_pid_, sig_num);
   else ::kill(child_pid_, sig_num);
+#endif
 }
 
 
@@ -1395,6 +1407,25 @@ inline void Popen::execute_process() noexcept(false)
   */
 
   this->process_handle_ = piProcInfo.hProcess;
+
+  try {
+      char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
+
+      int read_bytes = util::read_atmost_n(
+                                  this->error(),
+                                  err_buf,
+                                  SP_MAX_ERR_BUF_SIZ);
+      fclose(this->error());
+
+      if (read_bytes || strlen(err_buf)) {
+        // Throw whatever information we have about child failure
+        throw CalledProcessError(err_buf);
+      }
+  } catch (std::exception& exp) {
+      stream_.cleanup_fds();
+      throw;
+  }
+
 /*
   this->hExited_ =
       std::shared_future<int>(std::async(std::launch::async, [this] {
@@ -1550,6 +1581,7 @@ namespace detail {
 
 
   inline void Child::execute_child() {
+#ifndef _MSC_VER
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
@@ -1643,6 +1675,7 @@ namespace detail {
     // Calling application would not get this
     // exit failure
     exit (EXIT_FAILURE);
+#endif
   }
 
 
