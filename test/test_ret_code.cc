@@ -26,7 +26,7 @@ void test_ret_code_comm()
 }
 
 int main() {
-  test_ret_code();
+  // test_ret_code();
   test_ret_code_comm();
 
   return 0;
