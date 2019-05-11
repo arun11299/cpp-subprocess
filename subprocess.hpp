@@ -1932,6 +1932,12 @@ OutBuffer check_output(const std::string& arg, Args&&... args)
   return (detail::check_output_impl(arg, std::forward<Args>(args)...));
 }
 
+template <typename... Args>
+OutBuffer check_output(std::vector<std::string> plist, Args &&... args)
+{
+  return (detail::check_output_impl(plist, std::forward<Args>(args)...));
+}
+
 
 /*!
  * An easy way to pipeline easy commands.
