@@ -13,8 +13,10 @@ This library had these design goals:
 
 
 ## Supported Platforms
-Unlike python2.7 subprocess module, this library currently only supports MAC OS and Linux.
-It has no support for Windows in its current state.
+This library supports MAC OS and Linux.
+
+Support for Windows is limited at this time. Please report any specific use-cases that fail,
+and they will be fixed as they are reported.
 
 ## Integration
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
@@ -34,6 +36,7 @@ Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-moder
 ## Compiler Support
 Linux - g++ 4.8 and above
 Mac OS - Clang 3.4 and later 
+Windows - MSVC 2015 and above
 
 ## Examples
 Here are few examples to show how to get started:
