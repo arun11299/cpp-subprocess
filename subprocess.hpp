@@ -271,11 +271,11 @@ namespace util
 
     // Create a pipe for the child process's STDIN.
     if (!CreatePipe(read_handle, write_handle, &saAttr,0))
-      throw OSError("Stdin CreatePipe", 0);
+      throw OSError("CreatePipe", 0);
 
     // Ensure the write handle to the pipe for STDIN is not inherited.
-    if (!SetHandleInformation(child_handle, HANDLE_FLAG_INHERIT, 0))
-      throw OSError("Stdin SetHandleInformation", 0);
+    if (!SetHandleInformation(*child_handle, HANDLE_FLAG_INHERIT, 0))
+      throw OSError("SetHandleInformation", 0);
   }
 #endif
 
@@ -1130,6 +1130,26 @@ public:
     if (!defer_process_start_) execute_process();
   }
 
+  template <typename... Args>
+  Popen(std::vector<std::string> vargs_, Args &&... args) : vargs_(vargs_)
+  {
+    init_args(std::forward<Args>(args)...);
+
+    // Setup the communication channels of the Popen class
+    stream_.setup_comm_channels();
+
+    if (!defer_process_start_) execute_process();
+  }
+
+/*
+  ~Popen()
+  {
+#ifdef _MSC_VER
+    CloseHandle(this->process_handle_);
+#endif
+  }
+*/
+
   void start_process() noexcept(false);
 
   int pid() const noexcept { return child_pid_; }
@@ -1408,42 +1428,20 @@ inline void Popen::execute_process() noexcept(false)
 
   this->process_handle_ = piProcInfo.hProcess;
 
-  try {
-      char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
+  std::async(std::launch::async, [this] {
+    WaitForSingleObject(this->process_handle_, INFINITE);
 
-      int read_bytes = util::read_atmost_n(
-                                  this->error(),
-                                  err_buf,
-                                  SP_MAX_ERR_BUF_SIZ);
-      fclose(this->error());
-
-      if (read_bytes || strlen(err_buf)) {
-        // Throw whatever information we have about child failure
-        throw CalledProcessError(err_buf);
-      }
-  } catch (std::exception& exp) {
-      stream_.cleanup_fds();
-      throw;
-  }
+    CloseHandle(this->stream_.g_hChildStd_ERR_Wr);
+    CloseHandle(this->stream_.g_hChildStd_OUT_Wr);
+    CloseHandle(this->stream_.g_hChildStd_IN_Rd);
+  });
 
 /*
-  this->hExited_ =
-      std::shared_future<int>(std::async(std::launch::async, [this] {
-        WaitForSingleObject(this->hProcess_, INFINITE);
-
-        CloseHandle(this->stream_.g_hChildStd_ERR_Wr);
-        CloseHandle(this->stream_.g_hChildStd_OUT_Wr);
-        CloseHandle(this->stream_.g_hChildStd_IN_Rd);
-
-        DWORD exit_code;
-        if (FALSE == GetExitCodeProcess(this->hProcess_, &exit_code))
-          throw OSError("GetExitCodeProcess", 0);
-
-        CloseHandle(this->hProcess_);
-
-        return (int)exit_code;
-      }));
+  NOTE: In the linux version, there is a check to make sure that the process
+        has been started. Here, we do nothing because CreateProcess will throw
+        if we fail to create the process.
 */
+
 
 #else
 
@@ -1682,7 +1680,7 @@ namespace detail {
   inline void Streams::setup_comm_channels()
   {
 #ifdef _MSC_VER
-    util::configure_pipe(this->g_hChildStd_IN_Rd, &this->g_hChildStd_IN_Wr, &this->g_hChildStd_IN_Wr);
+    util::configure_pipe(&this->g_hChildStd_IN_Rd, &this->g_hChildStd_IN_Wr, &this->g_hChildStd_IN_Wr);
     this->input(util::file_from_handle(this->g_hChildStd_IN_Wr, "w"));
     this->write_to_child_ = _fileno(this->input());
 
