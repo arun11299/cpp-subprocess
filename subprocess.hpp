@@ -49,12 +49,22 @@ Documentation for C++ subprocessing libraray.
 #include <memory>
 #include <initializer_list>
 #include <exception>
+#include <locale>
+
+#ifdef _MSC_VER
+  #include <codecvt>
+#endif
 
 extern "C" {
+#ifdef _MSC_VER
+  #include <Windows.h>
+  #include <io.h>
+#else
+  #include <sys/wait.h>
   #include <unistd.h>
+#endif
   #include <fcntl.h>
   #include <sys/types.h>
-  #include <sys/wait.h>
   #include <signal.h>
 }
 
@@ -136,6 +146,138 @@ public:
 
 namespace util
 {
+  template <typename R> bool is_ready(std::shared_future<R> const &f)
+  {
+    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+  }
+
+  void quote_argument(const std::wstring &argument, std::wstring &command_line,
+                      bool force)
+  {
+    //
+    // Unless we're told otherwise, don't quote unless we actually
+    // need to do so --- hopefully avoid problems if programs won't
+    // parse quotes properly
+    //
+
+    if (force == false && argument.empty() == false &&
+        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
+      command_line.append(argument);
+    }
+    else {
+      command_line.push_back(L'"');
+
+      for (auto it = argument.begin();; ++it) {
+        unsigned number_backslashes = 0;
+
+        while (it != argument.end() && *it == L'\\') {
+          ++it;
+          ++number_backslashes;
+        }
+
+        if (it == argument.end()) {
+
+          //
+          // Escape all backslashes, but let the terminating
+          // double quotation mark we add below be interpreted
+          // as a metacharacter.
+          //
+
+          command_line.append(number_backslashes * 2, L'\\');
+          break;
+        }
+        else if (*it == L'"') {
+
+          //
+          // Escape all backslashes and the following
+          // double quotation mark.
+          //
+
+          command_line.append(number_backslashes * 2 + 1, L'\\');
+          command_line.push_back(*it);
+        }
+        else {
+
+          //
+          // Backslashes aren't special here.
+          //
+
+          command_line.append(number_backslashes, L'\\');
+          command_line.push_back(*it);
+        }
+      }
+
+      command_line.push_back(L'"');
+    }
+  }
+
+#ifdef _MSC_VER
+  std::string get_last_error()
+  {
+    DWORD errorMessageID = ::GetLastError();
+    if (errorMessageID == 0)
+      return std::string();
+
+    LPSTR messageBuffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&messageBuffer, 0, NULL);
+
+    std::string message(messageBuffer, size);
+
+    LocalFree(messageBuffer);
+
+    return message;
+  }
+
+  FILE *file_from_handle(HANDLE h, const char *mode)
+  {
+    int md;
+    if (mode == "w") {
+      md = _O_WRONLY;
+    }
+    else if (mode == "r") {
+      md = _O_RDONLY;
+    }
+    else {
+      throw OSError("file_from_handle", 0);
+    }
+
+    int os_fhandle = _open_osfhandle((intptr_t)h, md);
+    if (os_fhandle == -1) {
+      CloseHandle(h);
+      throw OSError("_open_osfhandle", 0);
+    }
+
+    FILE *fp = _fdopen(os_fhandle, mode);
+    if (fp == 0) {
+      _close(os_fhandle);
+      throw OSError("_fdopen", 0);
+    }
+
+    return fp;
+  }
+
+  void configure_pipe(HANDLE* read_handle, HANDLE* write_handle, HANDLE* child_handle)
+  {
+    SECURITY_ATTRIBUTES saAttr;
+
+    // Set the bInheritHandle flag so pipe handles are inherited.
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+    saAttr.lpSecurityDescriptor = NULL;
+
+    // Create a pipe for the child process's STDIN.
+    if (!CreatePipe(read_handle, write_handle, &saAttr,0))
+      throw OSError("Stdin CreatePipe", 0);
+
+    // Ensure the write handle to the pipe for STDIN is not inherited.
+    if (!SetHandleInformation(child_handle, HANDLE_FLAG_INHERIT, 0))
+      throw OSError("Stdin SetHandleInformation", 0);
+  }
+#endif
 
   /*!
    * Function: split
@@ -187,6 +329,7 @@ namespace util
   }
 
 
+#ifndef _MSC_VER
   /*!
    * Function: set_clo_on_exec
    * Sets/Resets the FD_CLOEXEC flag on the provided file descriptor
@@ -217,7 +360,7 @@ namespace util
    *         Second element is the write descriptor of pipe.
    */
   static inline
-  std::pair<int, int> pipe_cloexec() throw (OSError)
+  std::pair<int, int> pipe_cloexec() noexcept(false)
   {
     int pipe_fds[2];
     int res = pipe(pipe_fds);
@@ -230,6 +373,7 @@ namespace util
 
     return std::make_pair(pipe_fds[0], pipe_fds[1]);
   }
+#endif
 
 
   /*!
@@ -246,7 +390,7 @@ namespace util
   static inline
   int write_n(int fd, const char* buf, size_t length)
   {
-    int nwritten = 0;
+    size_t nwritten = 0;
     while (nwritten < length) {
       int written = write(fd, buf + nwritten, length - nwritten);
       if (written == -1) return -1;
@@ -259,9 +403,9 @@ namespace util
   /*!
    * Function: read_atmost_n
    * Reads at the most `read_upto` bytes from the
-   * file descriptor `fd` before returning.
+   * file object `fp` before returning.
    * Parameters:
-   * [in] fd : The file descriptor from which it needs to read.
+   * [in] fp : The file object from which it needs to read.
    * [in] buf : The buffer into which it needs to write the data.
    * [in] read_upto: Max number of bytes which must be read from `fd`.
    * [out] int : Number of bytes written to `buf` or read from `fd`
@@ -271,13 +415,17 @@ namespace util
    *  reaches 50 after which it will return with whatever data it read.
    */
   static inline
-  int read_atmost_n(int fd, char* buf, size_t read_upto)
+  int read_atmost_n(FILE* fp, char* buf, size_t read_upto)
   {
+#ifdef _MSC_VER
+    return (int)fread(buf, 1, read_upto, fp);
+#else
+    int fd = fileno(fp);
     int rbytes = 0;
     int eintr_cnter = 0;
 
     while (1) {
-      int read_bytes = read(fd, buf, read_upto);
+      int read_bytes = read(fd, buf + rbytes, read_upto - rbytes);
       if (read_bytes == -1) {
         if (errno == EINTR) {
           if (eintr_cnter >= 50) return -1;
@@ -291,51 +439,58 @@ namespace util
       rbytes += read_bytes;
     }
     return rbytes;
+#endif
   }
 
 
   /*!
    * Function: read_all
-   * Reads all the available data from `fd` into
+   * Reads all the available data from `fp` into
    * `buf`. Internally calls read_atmost_n.
    * Parameters:
-   * [in] fd : The file descriptor from which to read from.
+   * [in] fp : The file object from which to read from.
    * [in] buf : The buffer of type `class Buffer` into which
    *            the read data is written to.
    * [out] int: Number of bytes read OR -1 in case of failure.
    *
    * NOTE: `class Buffer` is a exposed public class. See below.
    */
-  template <typename Buffer>
-  // Requires Buffer to be of type class Buffer
-  static inline int read_all(int fd, Buffer& buf)
+
+  static inline int read_all(FILE* fp, std::vector<char>& buf)
   {
-    size_t orig_size = buf.size();
-    size_t increment = orig_size;
     auto buffer = buf.data();
     int total_bytes_read = 0;
+    int fill_sz = buf.size();
 
     while (1) {
-      int rd_bytes = read_atmost_n(fd, buffer, buf.size());
-      if (rd_bytes == increment) {
-        // Resize the buffer to accomodate more
-        orig_size = orig_size * 1.5;
-        increment = orig_size - buf.size();
-        buf.resize(orig_size);
-        buffer += rd_bytes;
-        total_bytes_read += rd_bytes;
-      } else if (rd_bytes != -1) {
-        total_bytes_read += rd_bytes;
-        break;
-      } else {
+      const int rd_bytes = read_atmost_n(fp, buffer, fill_sz);
+
+      if (rd_bytes == -1) { // Read finished
         if (total_bytes_read == 0) return -1;
+        break;
+
+      } else if (rd_bytes == fill_sz) { // Buffer full
+        const auto orig_sz = buf.size();
+        const auto new_sz = orig_sz * 2;
+        buf.resize(new_sz);
+        fill_sz = new_sz - orig_sz;
+
+        //update the buffer pointer
+        buffer = buf.data();
+        total_bytes_read += rd_bytes;
+        buffer += total_bytes_read;
+
+      } else { // Partial data ? Continue reading
+        total_bytes_read += rd_bytes;
+        fill_sz -= rd_bytes;
         break;
       }
     }
+    buf.erase(buf.begin()+total_bytes_read, buf.end()); // remove extra nulls
     return total_bytes_read;
   }
 
-
+#ifndef _MSC_VER
   /*!
    * Function: wait_for_child_exit
    * Waits for the process with pid `pid` to exit
@@ -363,7 +518,7 @@ namespace util
 
     return std::make_pair(ret, status);
   }
-
+#endif
 
 }; // end namespace util
 
@@ -514,7 +669,9 @@ struct input
   }
   input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
+#ifndef _MSC_VER    
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
+#endif
   }
 
   int rd_ch_ = -1;
@@ -545,7 +702,9 @@ struct output
   }
   output(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
+#ifndef _MSC_VER
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
+#endif
   }
 
   int rd_ch_ = -1;
@@ -575,7 +734,9 @@ struct error
   error(IOTYPE typ) {
     assert ((typ == PIPE || typ == STDOUT) && "STDERR not aloowed");
     if (typ == PIPE) {
+#ifndef _MSC_VER
       std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
+#endif
     } else {
       // Need to defer it till we have checked all arguments
       deferred_ = true;
@@ -602,7 +763,7 @@ public:
   preexec_func() {}
 
   template <typename Func>
-  preexec_func(Func f): holder_(new FuncHolder<Func>(f))
+  preexec_func(Func f): holder_(new FuncHolder<Func>(std::move(f)))
   {}
 
   void operator()() {
@@ -611,12 +772,13 @@ public:
 
 private:
   struct HolderBase {
-    virtual void operator()() const;
+    virtual void operator()() const = 0;
+    virtual ~HolderBase(){};
   };
   template <typename T>
   struct FuncHolder: HolderBase {
-    FuncHolder(T func): func_(func) {}
-    void operator()() const override {}
+    FuncHolder(T func): func_(std::move(func)) {}
+    void operator()() const override { func_(); }
     // The function pointer/reference
     T func_;
   };
@@ -875,6 +1037,15 @@ public:// Yes they are public
   std::shared_ptr<FILE> output_ = nullptr;
   std::shared_ptr<FILE> error_  = nullptr;
 
+#ifdef _MSC_VER
+  HANDLE g_hChildStd_IN_Rd = nullptr;
+  HANDLE g_hChildStd_IN_Wr = nullptr;
+  HANDLE g_hChildStd_OUT_Rd = nullptr;
+  HANDLE g_hChildStd_OUT_Wr = nullptr;
+  HANDLE g_hChildStd_ERR_Rd = nullptr;
+  HANDLE g_hChildStd_ERR_Wr = nullptr;
+#endif
+
   // Buffer size for the IO streams
   int bufsiz_ = 0;
 
@@ -970,15 +1141,15 @@ public:
     if (!defer_process_start_) execute_process();
   }
 
-  void start_process() throw (CalledProcessError, OSError);
+  void start_process() noexcept(false);
 
   int pid() const noexcept { return child_pid_; }
 
   int retcode() const noexcept { return retcode_; }
 
-  int wait() throw(OSError);
+  int wait() noexcept(false);
 
-  int poll() throw(OSError);
+  int poll() noexcept(false);
 
   // Does not fail, Caller is expected to recheck the
   // status with a call to poll()
@@ -997,14 +1168,14 @@ public:
   std::pair<OutBuffer, ErrBuffer> communicate(const char* msg, size_t length)
   {
     auto res = stream_.communicate(msg, length);
-    wait();
+    retcode_ = wait();
     return res;
   }
 
   std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   {
     auto res = stream_.communicate(msg);
-    wait();
+    retcode_ = wait();
     return res;
   }
 
@@ -1017,15 +1188,24 @@ public:
   FILE* output() { return stream_.output();}
   FILE* error()  { return stream_.error(); }
 
+  /// Stream close APIs
+  void close_input()  { stream_.input_.reset();  }
+  void close_output() { stream_.output_.reset(); }
+  void close_error()  { stream_.error_.reset();  }
+
 private:
   template <typename F, typename... Args>
   void init_args(F&& farg, Args&&... args);
   void init_args();
   void populate_c_argv();
-  void execute_process() throw (CalledProcessError, OSError);
+  void execute_process() noexcept(false);
 
 private:
   detail::Streams stream_;
+
+#ifdef _MSC_VER
+  HANDLE process_handle_;
+#endif
 
   bool defer_process_start_ = false;
   bool close_fds_ = false;
@@ -1071,7 +1251,7 @@ inline void Popen::populate_c_argv()
   cargv_.push_back(nullptr);
 }
 
-inline void Popen::start_process() throw (CalledProcessError, OSError)
+inline void Popen::start_process() noexcept(false)
 {
   // The process was started/tried to be started
   // in the constructor itself.
@@ -1085,8 +1265,13 @@ inline void Popen::start_process() throw (CalledProcessError, OSError)
   execute_process();
 }
 
-inline int Popen::wait() throw (OSError)
+inline int Popen::wait() noexcept(false)
 {
+#ifdef _MSC_VER
+  int ret = WaitForSingleObject(process_handle_, INFINITE);
+
+  return 0;
+#else
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
   if (ret == -1) {
@@ -1098,17 +1283,33 @@ inline int Popen::wait() throw (OSError)
   else return 255;
 
   return 0;
+#endif
 }
 
-inline int Popen::poll() throw (OSError)
+inline int Popen::poll() noexcept(false)
 {
   int status;
   if (!child_created_) return -1; // TODO: ??
 
+#ifdef _MSC_VER
+  int ret = WaitForSingleObject(process_handle_, 0);
+  if (ret != WAIT_OBJECT_0) return -1;
+#else
   // Returns zero if child is still running
   int ret = waitpid(child_pid_, &status, WNOHANG);
   if (ret == 0) return -1;
+#endif
 
+#ifdef _MSC_VER
+  DWORD dretcode_;
+  if (FALSE == GetExitCodeProcess(process_handle_, &dretcode_))
+      throw OSError("GetExitCodeProcess", 0);
+
+  retcode_ = (int)dretcode_;
+  CloseHandle(process_handle_);
+
+  return retcode_;
+#else
   if (ret == child_pid_) {
     if (WIFSIGNALED(status)) {
       retcode_ = WTERMSIG(status);
@@ -1133,17 +1334,130 @@ inline int Popen::poll() throw (OSError)
   }
 
   return retcode_;
+#endif
 }
 
 inline void Popen::kill(int sig_num)
 {
+#ifdef _MSC_VER
+  if (!TerminateProcess(this->process_handle_, (UINT)sig_num)) {
+    throw OSError("TerminateProcess", 0);
+  }
+#else
   if (session_leader_) killpg(child_pid_, sig_num);
   else ::kill(child_pid_, sig_num);
+#endif
 }
 
 
-inline void Popen::execute_process() throw (CalledProcessError, OSError)
+inline void Popen::execute_process() noexcept(false)
 {
+#ifdef _MSC_VER
+  if (this->shell_) {
+    throw OSError("shell not currently supported on windows", 0);
+  }
+
+  if (exe_name_.length()) {
+    this->vargs_.insert(this->vargs_.begin(), this->exe_name_);
+    this->populate_c_argv();
+  }
+  this->exe_name_ = vargs_[0];
+
+  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  std::wstring argument;
+  std::wstring command_line;
+
+  for (auto arg : this->vargs_) {
+    argument = converter.from_bytes(arg);
+    util::quote_argument(argument, command_line, true);
+    command_line += L" ";
+  }
+
+  // CreateProcessW can modify szCmdLine so we allocate needed memory
+  wchar_t *szCmdline = new wchar_t[command_line.size() + 1];
+  wcscpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
+  PROCESS_INFORMATION piProcInfo;
+  STARTUPINFOW siStartInfo;
+  BOOL bSuccess = FALSE;
+
+  // Set up members of the PROCESS_INFORMATION structure.
+  ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
+
+  // Set up members of the STARTUPINFOW structure.
+  // This structure specifies the STDIN and STDOUT handles for redirection.
+
+  ZeroMemory(&siStartInfo, sizeof(STARTUPINFOW));
+  siStartInfo.cb = sizeof(STARTUPINFOW);
+
+  siStartInfo.hStdError = this->stream_.g_hChildStd_OUT_Wr;
+  siStartInfo.hStdOutput = this->stream_.g_hChildStd_OUT_Wr;
+  siStartInfo.hStdInput = this->stream_.g_hChildStd_IN_Rd;
+
+  siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
+
+  // Create the child process.
+  bSuccess = CreateProcessW(NULL,
+                            szCmdline,    // command line
+                            NULL,         // process security attributes
+                            NULL,         // primary thread security attributes
+                            TRUE,         // handles are inherited
+                            0,            // creation flags
+                            NULL,         // use parent's environment
+                            NULL,         // use parent's current directory
+                            &siStartInfo, // STARTUPINFOW pointer
+                            &piProcInfo); // receives PROCESS_INFORMATION
+
+  // If an error occurs, exit the application.
+  if (!bSuccess)
+    throw OSError("CreateProcess failed", 0);
+
+  CloseHandle(piProcInfo.hThread);
+
+  /*
+    TODO: use common apis to close linux handles
+  */
+
+  this->process_handle_ = piProcInfo.hProcess;
+
+  try {
+      char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
+
+      int read_bytes = util::read_atmost_n(
+                                  this->error(),
+                                  err_buf,
+                                  SP_MAX_ERR_BUF_SIZ);
+      fclose(this->error());
+
+      if (read_bytes || strlen(err_buf)) {
+        // Throw whatever information we have about child failure
+        throw CalledProcessError(err_buf);
+      }
+  } catch (std::exception& exp) {
+      stream_.cleanup_fds();
+      throw;
+  }
+
+/*
+  this->hExited_ =
+      std::shared_future<int>(std::async(std::launch::async, [this] {
+        WaitForSingleObject(this->hProcess_, INFINITE);
+
+        CloseHandle(this->stream_.g_hChildStd_ERR_Wr);
+        CloseHandle(this->stream_.g_hChildStd_OUT_Wr);
+        CloseHandle(this->stream_.g_hChildStd_IN_Rd);
+
+        DWORD exit_code;
+        if (FALSE == GetExitCodeProcess(this->hProcess_, &exit_code))
+          throw OSError("GetExitCodeProcess", 0);
+
+        CloseHandle(this->hProcess_);
+
+        return (int)exit_code;
+      }));
+*/
+
+#else
+
   int err_rd_pipe, err_wr_pipe;
   std::tie(err_rd_pipe, err_wr_pipe) = util::pipe_cloexec();
 
@@ -1160,11 +1474,6 @@ inline void Popen::execute_process() throw (CalledProcessError, OSError)
     populate_c_argv();
   }
   exe_name_ = vargs_[0];
-
-  std::signal(SIGCHLD, [](int sig){
-    int status;
-    waitpid(-1, &status, WNOHANG);
-  });
 
   child_pid_ = fork();
 
@@ -1197,7 +1506,7 @@ inline void Popen::execute_process() throw (CalledProcessError, OSError)
       char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
 
       int read_bytes = util::read_atmost_n(
-                                  err_rd_pipe,
+                                  fdopen(err_rd_pipe, "r"),
                                   err_buf,
                                   SP_MAX_ERR_BUF_SIZ);
       close(err_rd_pipe);
@@ -1213,10 +1522,11 @@ inline void Popen::execute_process() throw (CalledProcessError, OSError)
       }
     } catch (std::exception& exp) {
       stream_.cleanup_fds();
-      throw exp;
+      throw;
     }
 
   }
+#endif
 }
 
 namespace detail {
@@ -1282,6 +1592,7 @@ namespace detail {
 
 
   inline void Child::execute_child() {
+#ifndef _MSC_VER
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
@@ -1369,17 +1680,32 @@ namespace detail {
       std::string err_msg(exp.what());
       //ATTN: Can we do something on error here ?
       util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
-      throw exp;
+      throw;
     }
 
     // Calling application would not get this
     // exit failure
     exit (EXIT_FAILURE);
+#endif
   }
 
 
   inline void Streams::setup_comm_channels()
   {
+#ifdef _MSC_VER
+    util::configure_pipe(this->g_hChildStd_IN_Rd, &this->g_hChildStd_IN_Wr, &this->g_hChildStd_IN_Wr);
+    this->input(util::file_from_handle(this->g_hChildStd_IN_Wr, "w"));
+    this->write_to_child_ = _fileno(this->input());
+
+    util::configure_pipe(&this->g_hChildStd_OUT_Rd, &this->g_hChildStd_OUT_Wr, &this->g_hChildStd_OUT_Rd);
+    this->output(util::file_from_handle(this->g_hChildStd_OUT_Rd, "r"));
+    this->read_from_child_ = _fileno(this->output());
+
+    util::configure_pipe(&this->g_hChildStd_ERR_Rd, &this->g_hChildStd_ERR_Wr, &this->g_hChildStd_ERR_Rd);
+    this->error(util::file_from_handle(this->g_hChildStd_ERR_Rd, "r"));
+    this->err_read_ = _fileno(this->error());
+#else
+
     if (write_to_child_ != -1)  input(fdopen(write_to_child_, "wb"));
     if (read_from_child_ != -1) output(fdopen(read_from_child_, "rb"));
     if (err_read_ != -1)        error(fdopen(err_read_, "rb"));
@@ -1399,6 +1725,7 @@ namespace detail {
         setvbuf(h, nullptr, _IOFBF, bufsiz_);
       };
     }
+  #endif
   }
 
   inline int Communication::send(const char* msg, size_t length)
@@ -1420,6 +1747,7 @@ namespace detail {
     // at all, using select() or threads is unnecessary.
     auto hndls = {stream_->input(), stream_->output(), stream_->error()};
     int count = std::count(std::begin(hndls), std::end(hndls), nullptr);
+    const int len_conv = length;
 
     if (count >= 2) {
       OutBuffer obuf;
@@ -1427,7 +1755,7 @@ namespace detail {
       if (stream_->input()) {
         if (msg) {
           int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-          if (wbytes < length) {
+          if (wbytes < len_conv) {
             if (errno != EPIPE && errno != EINVAL) {
               throw OSError("fwrite error", errno);
             }
@@ -1438,12 +1766,12 @@ namespace detail {
       } else if (stream_->output()) {
         // Read till EOF
         // ATTN: This could be blocking, if the process
-        // at the other end screws up, we get screwed up as well
+        // at the other end screws up, we get screwed as well
         obuf.add_cap(out_buf_cap_);
 
         int rbytes = util::read_all(
-                                  fileno(stream_->output()),
-                                  obuf.buf);
+                            stream_->output(),
+                            obuf.buf);
 
         if (rbytes == -1) {
           throw OSError("read to obuf failed", errno);
@@ -1458,7 +1786,7 @@ namespace detail {
         ebuf.add_cap(err_buf_cap_);
 
         int rbytes = util::read_atmost_n(
-                                  fileno(stream_->error()),
+                                  stream_->error(),
                                   ebuf.buf.data(),
                                   ebuf.buf.size());
 
@@ -1483,13 +1811,14 @@ namespace detail {
     OutBuffer obuf;
     ErrBuffer ebuf;
     std::future<int> out_fut, err_fut;
+    const int length_conv = length;
 
     if (stream_->output()) {
       obuf.add_cap(out_buf_cap_);
 
       out_fut = std::async(std::launch::async,
                           [&obuf, this] {
-                            return util::read_all(fileno(this->stream_->output()), obuf.buf);
+                            return util::read_all(this->stream_->output(), obuf.buf);
                           });
     }
     if (stream_->error()) {
@@ -1497,13 +1826,13 @@ namespace detail {
 
       err_fut = std::async(std::launch::async,
                           [&ebuf, this] {
-                            return util::read_all(fileno(this->stream_->error()), ebuf.buf);
+                            return util::read_all(this->stream_->error(), ebuf.buf);
                           });
     }
     if (stream_->input()) {
       if (msg) {
         int wbytes = std::fwrite(msg, sizeof(char), length, stream_->input());
-        if (wbytes < length) {
+        if (wbytes < length_conv) {
           if (errno != EPIPE && errno != EINVAL) {
             throw OSError("fwrite error", errno);
           }

@@ -51,12 +51,37 @@ void test_sleep()
   std::cout << "Sleep ended: ret code = " << p.retcode() << std::endl;
 }
 
+void test_read_all()
+{
+  Popen p = Popen({"echo","12345678"}, output{PIPE});
+  
+  std::vector<char> buf(6);
+  int rbytes = util::read_all(p.output(), buf);
+
+  std::string out(buf.begin(), buf.end());
+
+  assert(out == "12345678\n" && rbytes == 9); // echo puts a new line at the end of output
+  std::cout<<"read_all() succeeded"<<std::endl;
+}
+
+void test_simple_cmd()
+{
+  auto p = Popen({"ls", "-l"}, output{PIPE});
+  auto obuf = p.communicate().first;
+  std::cout << "Data : " << obuf.buf.data() << std::endl;
+  std::cout << "Data len: " << obuf.length << std::endl;
+}
+
 int main() {
+  /*
   test_exename();
   test_input();
   test_piping();
   test_easy_piping();
   test_shell();
   test_sleep();
+  test_read_all();
+  */
+  test_simple_cmd();
   return 0;
 }

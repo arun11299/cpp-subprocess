@@ -48,7 +48,7 @@ std::cout << "Data len: " << obuf.length << std::endl;
 
 More detailed way:
 ```cpp
-auto p = Popen({"ls", "-l"});
+auto p = Popen({"ls", "-l"}, output{PIPE});
 auto obuf = p.communicate().first;
 std::cout << "Data : " << obuf.buf.data() << std::endl;
 std::cout << "Data len: " << obuf.length << std::endl;
