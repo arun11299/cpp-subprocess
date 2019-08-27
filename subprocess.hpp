@@ -521,7 +521,7 @@ namespace util
   }
 #endif
 
-}; // end namespace util
+} // end namespace util
 
 
 
@@ -1068,7 +1068,7 @@ private:
   Communication comm_;
 };
 
-}; // end namespace detail
+} // end namespace detail
 
 
 
@@ -1845,7 +1845,7 @@ namespace detail {
     return std::make_pair(std::move(obuf), std::move(ebuf));
   }
 
-}; // end namespace detail
+} // end namespace detail
 
 
 
@@ -1954,6 +1954,6 @@ OutBuffer pipeline(Args&&... args)
   return (pcmds.back().communicate().first);
 }
 
-};
+}
 
 #endif // SUBPROCESS_HPP
