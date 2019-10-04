@@ -382,7 +382,7 @@ namespace util
    * Writes `length` bytes to the file descriptor `fd`
    * from the buffer `buf`.
    * Parameters:
-   * [in] fd : The file descriptotr to write to.
+   * [in] fd : The file descriptor to write to.
    * [in] buf: Buffer from which data needs to be written to fd.
    * [in] length: The number of bytes that needs to be written from
    *              `buf` to `fd`.
