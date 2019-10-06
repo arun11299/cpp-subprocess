@@ -849,7 +849,7 @@ namespace detail {
 // a variadic parameter pack
 // This is particularly required to do a compile time
 // checking of the arguments provided to 'check_ouput' function
-// wherein the user is not expected to provide an 'ouput' option.
+// wherein the user is not expected to provide an 'output' option.
 
 template <typename... T> struct param_pack{};
 
