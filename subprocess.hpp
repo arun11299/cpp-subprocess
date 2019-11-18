@@ -649,7 +649,7 @@ enum IOTYPE {
  * process. It can be:
  * 1. An already open file descriptor.
  * 2. A file name.
- * 3. IOTYPE. Usuall a PIPE
+ * 3. IOTYPE. Usual a PIPE
  *
  * Eg: input{PIPE}
  * OR in case of redirection, output of another Popen
