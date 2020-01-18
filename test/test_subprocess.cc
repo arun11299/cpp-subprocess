@@ -5,7 +5,11 @@ using namespace subprocess;
 
 void test_exename()
 {
+#ifdef _MSC_VER
+  auto ret = call({"--version"}, executable{"cmake"}, shell{false});
+#else
   auto ret = call({"-l"}, executable{"ls"}, shell{false});
+#endif
   std::cout << ret << std::endl;
 }
 
@@ -35,7 +39,11 @@ void test_easy_piping()
 
 void test_shell()
 {
-  auto obuf = check_output({"ls", "-l"}, shell{false});
+#ifdef _MSC_VER
+  auto obuf = check_output({"cmake", "--version"}, shell{false});
+#else
+  auto obuf = check_output({"ls", "-l"}, shell{false});  
+#endif
   std::cout << obuf.buf.data() << std::endl;
 }
 
@@ -43,9 +51,13 @@ void test_sleep()
 {
   auto p = Popen({"sleep", "30"}, shell{true});
 
-  while (p.poll() == -1) {
+  while (p.poll() == -1)
+  {
     std::cout << "Waiting..." << std::endl;
+#ifdef _MSC_VER
+#else
     sleep(1);
+#endif
   }
 
   std::cout << "Sleep ended: ret code = " << p.retcode() << std::endl;
@@ -53,15 +65,15 @@ void test_sleep()
 
 void test_read_all()
 {
-  Popen p = Popen({"echo","12345678"}, output{PIPE});
-  
+  Popen p = Popen({"echo", "12345678"}, output{PIPE});
+
   std::vector<char> buf(6);
   int rbytes = util::read_all(p.output(), buf);
 
   std::string out(buf.begin(), buf.end());
 
   assert(out == "12345678\n" && rbytes == 9); // echo puts a new line at the end of output
-  std::cout<<"read_all() succeeded"<<std::endl;
+  std::cout << "read_all() succeeded" << std::endl;
 }
 
 void test_simple_cmd()

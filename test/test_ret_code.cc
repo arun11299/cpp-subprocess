@@ -8,7 +8,9 @@ void test_ret_code()
   std::cout << "Test::test_poll_ret_code" << std::endl;
   auto p = sp::Popen({"/usr/bin/false"});
   while (p.poll() == -1) {
+#ifndef _MSC_VER
     usleep(1000 * 100);
+#endif
   }
   assert (p.retcode() == 1);
 }
