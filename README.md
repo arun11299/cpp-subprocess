@@ -1,4 +1,4 @@
-![Subprocessing in C++]
+## [Subprocessing in C++]
 
 ## Design Goals
 The only goal was to develop something that is as close as python2.7 subprocess module in dealing with processes.
