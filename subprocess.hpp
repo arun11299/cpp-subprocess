@@ -1672,7 +1672,7 @@ namespace detail {
 
     // Calling application would not get this
     // exit failure
-    exit (EXIT_FAILURE);
+    _exit (EXIT_FAILURE);
 #endif
   }
 
