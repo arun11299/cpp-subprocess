@@ -670,7 +670,7 @@ struct input
   }
   input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef _MSC_VER    
+#ifndef _MSC_VER
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -1668,12 +1668,11 @@ namespace detail {
       std::string err_msg(exp.what());
       //ATTN: Can we do something on error here ?
       util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
-      throw;
     }
 
     // Calling application would not get this
     // exit failure
-    exit (EXIT_FAILURE);
+    _exit (EXIT_FAILURE);
 #endif
   }
 
