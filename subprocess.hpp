@@ -1299,7 +1299,10 @@ inline int Popen::wait() noexcept(false)
 inline int Popen::poll() noexcept(false)
 {
   int status;
+
+#ifndef _MSC_VER
   if (!child_created_) return -1; // TODO: ??
+#endif
 
 #ifdef _MSC_VER
   int ret = WaitForSingleObject(process_handle_, 0);
