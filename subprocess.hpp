@@ -236,10 +236,14 @@ namespace util
   FILE *file_from_handle(HANDLE h, const char *mode)
   {
     int md;
-    if (mode == "w") {
+    if (!mode) {
+      throw OSError("invalid_mode", 0);
+    }
+
+    if (mode[0] == 'w') {
       md = _O_WRONLY;
     }
-    else if (mode == "r") {
+    else if (mode[0] == 'r') {
       md = _O_RDONLY;
     }
     else {
