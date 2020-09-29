@@ -102,7 +102,7 @@ namespace subprocess {
 // from pipe
 static const size_t SP_MAX_ERR_BUF_SIZ = 1024;
 
-// Default buffer capcity for OutBuffer and ErrBuffer.
+// Default buffer capacity for OutBuffer and ErrBuffer.
 // If the data exceeds this capacity, the buffer size is grown
 // by 1.5 times its previous capacity
 static const size_t DEFAULT_BUF_CAP_BYTES = 8192;
