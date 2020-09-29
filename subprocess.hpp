@@ -59,6 +59,7 @@ extern "C" {
 #ifdef _MSC_VER
   #include <Windows.h>
   #include <io.h>
+  #include <cwchar>
 #else
   #include <sys/wait.h>
   #include <unistd.h>
@@ -144,6 +145,18 @@ public:
 
 //--------------------------------------------------------------------
 
+//Environment Variable types
+#ifndef _MSC_VER
+	using env_string_t = std::string;
+	using env_char_t = char;
+#else
+	using env_string_t = std::wstring;
+	using env_char_t = wchar_t;
+#endif
+using env_map_t = std::map<env_string_t, env_string_t>;
+using env_vector_t = std::vector<env_char_t>;
+
+//--------------------------------------------------------------------
 namespace util
 {
   template <typename R>
@@ -282,6 +295,100 @@ namespace util
     if (!SetHandleInformation(*child_handle, HANDLE_FLAG_INHERIT, 0))
       throw OSError("SetHandleInformation", 0);
   }
+
+  // env_map_t MapFromWindowsEnvironment()
+  // * Imports current Environment in a C-string table
+  // * Parses the strings by splitting on the first "=" per line
+  // * Creates a map of the variables
+  // * Returns the map
+  inline env_map_t MapFromWindowsEnvironment(){
+      wchar_t *variable_strings_ptr;
+      wchar_t *environment_strings_ptr;
+      std::wstring delimeter(L"=");
+      int del_len = delimeter.length();
+      env_map_t mapped_environment;
+
+      // Get a pointer to the environment block.
+      environment_strings_ptr = GetEnvironmentStringsW();
+      // If the returned pointer is NULL, exit.
+      if (environment_strings_ptr == NULL)
+      {
+          throw OSError("GetEnvironmentStringsW", 0);
+      }
+
+      // Variable strings are separated by NULL byte, and the block is
+      // terminated by a NULL byte.
+
+      variable_strings_ptr = (wchar_t *) environment_strings_ptr;
+
+      //Since the environment map ends with a null, we can loop until we find it.
+      while (*variable_strings_ptr)
+      {
+          // Create a string from Variable String
+          env_string_t current_line(variable_strings_ptr);
+          // Find the first "equals" sign.
+          auto pos = current_line.find(delimeter);
+          // Assuming it's not missing ...
+          if(pos!=std::wstring::npos){
+              // ... parse the key and value.
+              env_string_t key = current_line.substr(0, pos);
+              env_string_t value = current_line.substr(pos + del_len);
+              // Map the entry.
+              mapped_environment[key] = value;
+          }
+          // Jump to next line in the environment map.
+          variable_strings_ptr += std::wcslen(variable_strings_ptr) + 1;
+      }
+      // We're done with the old environment map buffer.
+      FreeEnvironmentStringsW(environment_strings_ptr);
+
+      // Return the map.
+      return mapped_environment;
+  }
+
+  // env_vector_t WindowsEnvironmentVectorFromMap(const env_map_t &source_map)
+  // * Creates a vector buffer for the new environment string table
+  // * Copies in the mapped variables
+  // * Returns the vector
+  inline env_vector_t WindowsEnvironmentVectorFromMap(const env_map_t &source_map)
+  {
+	// Make a new environment map buffer.
+	env_vector_t environment_map_buffer;
+	// Give it some space.
+	environment_map_buffer.reserve(4096);
+
+	// And fill'er up.
+	for(auto kv: source_map){
+	  // Create the line
+	  env_string_t current_line(kv.first); current_line += L"="; current_line += kv.second;
+	  // Add the line to the buffer.
+	  std::copy(current_line.begin(), current_line.end(), std::back_inserter(environment_map_buffer));
+	  // Append a null
+	  environment_map_buffer.push_back(0);
+	}
+	// Append one last null because of how Windows does it's environment maps.
+	environment_map_buffer.push_back(0);
+
+	return environment_map_buffer;
+  }
+
+  // env_vector_t CreateUpdatedWindowsEnvironmentVector(const env_map_t &changes_map)
+  // * Merges host environment with new mapped variables
+  // * Creates and returns string vector based on map
+  inline env_vector_t CreateUpdatedWindowsEnvironmentVector(const env_map_t &changes_map){
+	// Import the environment map
+	env_map_t environment_map = MapFromWindowsEnvironment();
+    // Merge in the changes with overwrite
+	for(auto& it: changes_map)
+	{
+		environment_map[it.first] = it.second;
+	}
+    // Create a Windows-usable Environment Map Buffer
+    env_vector_t environment_map_strings_vector = WindowsEnvironmentVectorFromMap(environment_map);
+
+	return environment_map_strings_vector;
+  }
+
 #endif
 
   /*!
@@ -629,11 +736,11 @@ struct cwd: string_arg
  */
 struct environment
 {
-  environment(std::map<std::string, std::string>&& env):
+  environment(env_map_t&& env):
     env_(std::move(env)) {}
-  environment(const std::map<std::string, std::string>& env):
+  environment(const env_map_t& env):
     env_(env) {}
-  std::map<std::string, std::string> env_;
+  env_map_t env_;
 };
 
 
@@ -1229,7 +1336,7 @@ private:
 
   std::string exe_name_;
   std::string cwd_;
-  std::map<std::string, std::string> env_;
+  env_map_t env_;
   preexec_func preexec_fn_;
 
   // Command in string format
@@ -1374,6 +1481,13 @@ inline void Popen::execute_process() noexcept(false)
     throw OSError("shell not currently supported on windows", 0);
   }
 
+  void* environment_string_table_ptr = nullptr;
+  env_vector_t environment_string_vector;
+  if(this->env_.size()){
+	  environment_string_vector = util::CreateUpdatedWindowsEnvironmentVector(env_);
+	  environment_string_table_ptr = (void*)environment_string_vector.data();
+  }
+
   if (exe_name_.length()) {
     this->vargs_.insert(this->vargs_.begin(), this->exe_name_);
     this->populate_c_argv();
@@ -1396,6 +1510,7 @@ inline void Popen::execute_process() noexcept(false)
   PROCESS_INFORMATION piProcInfo;
   STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
 
   // Set up members of the PROCESS_INFORMATION structure.
   ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
@@ -1418,15 +1533,15 @@ inline void Popen::execute_process() noexcept(false)
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
                             TRUE,         // handles are inherited
-                            0,            // creation flags
-                            NULL,         // use parent's environment
+                            creation_flags,	// creation flags
+                            environment_string_table_ptr,  // use provided environment
                             NULL,         // use parent's current directory
                             &siStartInfo, // STARTUPINFOW pointer
                             &piProcInfo); // receives PROCESS_INFORMATION
 
   // If an error occurs, exit the application.
   if (!bSuccess)
-    throw OSError("CreateProcess failed", 0);
+    throw OSError("CreateProcessW failed", 0);
 
   CloseHandle(piProcInfo.hThread);
 
