@@ -51,12 +51,16 @@ Documentation for C++ subprocessing libraray.
 #include <exception>
 #include <locale>
 
-#ifdef _MSC_VER
+#if (defined _MSC_VER) || (defined __MINGW32__)
+  #define __USING_WINDOWS__
+#endif
+
+#ifdef __USING_WINDOWS__
   #include <codecvt>
 #endif
 
 extern "C" {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   #include <Windows.h>
   #include <io.h>
   #include <cwchar>
@@ -225,8 +229,8 @@ namespace util
     }
   }
 
-#ifdef _MSC_VER
-  std::string get_last_error()
+#ifdef __USING_WINDOWS__
+  inline std::string get_last_error()
   {
     DWORD errorMessageID = ::GetLastError();
     if (errorMessageID == 0)
@@ -246,7 +250,7 @@ namespace util
     return message;
   }
 
-  FILE *file_from_handle(HANDLE h, const char *mode)
+  inline FILE *file_from_handle(HANDLE h, const char *mode)
   {
     int md;
     if (!mode) {
@@ -278,7 +282,7 @@ namespace util
     return fp;
   }
 
-  void configure_pipe(HANDLE* read_handle, HANDLE* write_handle, HANDLE* child_handle)
+  inline void configure_pipe(HANDLE* read_handle, HANDLE* write_handle, HANDLE* child_handle)
   {
     SECURITY_ATTRIBUTES saAttr;
 
@@ -441,7 +445,7 @@ namespace util
   }
 
 
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
   /*!
    * Function: set_clo_on_exec
    * Sets/Resets the FD_CLOEXEC flag on the provided file descriptor
@@ -529,7 +533,7 @@ namespace util
   static inline
   int read_atmost_n(FILE* fp, char* buf, size_t read_upto)
   {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
     return (int)fread(buf, 1, read_upto, fp);
 #else
     int fd = fileno(fp);
@@ -602,7 +606,7 @@ namespace util
     return total_bytes_read;
   }
 
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
   /*!
    * Function: wait_for_child_exit
    * Waits for the process with pid `pid` to exit
@@ -781,7 +785,7 @@ struct input
   }
   input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__    
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -814,7 +818,7 @@ struct output
   }
   output(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -846,7 +850,7 @@ struct error
   error(IOTYPE typ) {
     assert ((typ == PIPE || typ == STDOUT) && "STDERR not aloowed");
     if (typ == PIPE) {
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
       std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
     } else {
@@ -1149,7 +1153,7 @@ public:// Yes they are public
   std::shared_ptr<FILE> output_ = nullptr;
   std::shared_ptr<FILE> error_  = nullptr;
 
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   HANDLE g_hChildStd_IN_Rd = nullptr;
   HANDLE g_hChildStd_IN_Wr = nullptr;
   HANDLE g_hChildStd_OUT_Rd = nullptr;
@@ -1256,7 +1260,7 @@ public:
 /*
   ~Popen()
   {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
     CloseHandle(this->process_handle_);
 #endif
   }
@@ -1324,7 +1328,7 @@ private:
 private:
   detail::Streams stream_;
 
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   HANDLE process_handle_;
 #endif
 
@@ -1388,7 +1392,7 @@ inline void Popen::start_process() noexcept(false)
 
 inline int Popen::wait() noexcept(false)
 {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   int ret = WaitForSingleObject(process_handle_, INFINITE);
 
   return 0;
@@ -1415,7 +1419,7 @@ inline int Popen::poll() noexcept(false)
   if (!child_created_) return -1; // TODO: ??
 #endif
 
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   int ret = WaitForSingleObject(process_handle_, 0);
   if (ret != WAIT_OBJECT_0) return -1;
 #else
@@ -1424,7 +1428,7 @@ inline int Popen::poll() noexcept(false)
   if (ret == 0) return -1;
 #endif
 
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   DWORD dretcode_;
   if (FALSE == GetExitCodeProcess(process_handle_, &dretcode_))
       throw OSError("GetExitCodeProcess", 0);
@@ -1463,7 +1467,7 @@ inline int Popen::poll() noexcept(false)
 
 inline void Popen::kill(int sig_num)
 {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   if (!TerminateProcess(this->process_handle_, (UINT)sig_num)) {
     throw OSError("TerminateProcess", 0);
   }
@@ -1476,7 +1480,7 @@ inline void Popen::kill(int sig_num)
 
 inline void Popen::execute_process() noexcept(false)
 {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   if (this->shell_) {
     throw OSError("shell not currently supported on windows", 0);
   }
@@ -1702,7 +1706,7 @@ namespace detail {
 
 
   inline void Child::execute_child() {
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
@@ -1801,7 +1805,7 @@ namespace detail {
 
   inline void Streams::setup_comm_channels()
   {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
     util::configure_pipe(&this->g_hChildStd_IN_Rd, &this->g_hChildStd_IN_Wr, &this->g_hChildStd_IN_Wr);
     this->input(util::file_from_handle(this->g_hChildStd_IN_Wr, "w"));
     this->write_to_child_ = _fileno(this->input());
