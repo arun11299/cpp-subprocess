@@ -1996,7 +1996,7 @@ namespace detail
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
 
-  static inline void pipeline_impl(std::vector<Popen>& cmds)
+  static inline void pipeline_impl([[maybe_unused]] std::vector<Popen>& cmds)
   {
     /* EMPTY IMPL */
   }
