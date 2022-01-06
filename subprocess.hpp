@@ -123,7 +123,7 @@ static const size_t DEFAULT_BUF_CAP_BYTES = 8192;
 class CalledProcessError: public std::runtime_error
 {
 public:
-  CalledProcessError(const std::string& error_msg):
+  explicit CalledProcessError(const std::string& error_msg):
     std::runtime_error(error_msg)
   {}
 };
@@ -651,7 +651,7 @@ namespace util
  * Default value is 0.
  */
 struct bufsize {
-  bufsize(int siz): bufsiz(siz) {}
+  explicit bufsize(int siz): bufsiz(siz) {}
   int  bufsiz = 0;
 };
 
@@ -661,7 +661,7 @@ struct bufsize {
  * Default value is false.
  */
 struct defer_spawn {
-  defer_spawn(bool d): defer(d) {}
+  explicit defer_spawn(bool d): defer(d) {}
   bool defer  = false;
 };
 
@@ -675,7 +675,7 @@ struct defer_spawn {
  * Default value is false.
  */
 struct close_fds {
-  close_fds(bool c): close_all(c) {}
+  explicit close_fds(bool c): close_all(c) {}
   bool close_all = false;
 };
 
@@ -686,12 +686,12 @@ struct close_fds {
  * Default value is false.
  */
 struct session_leader {
-  session_leader(bool sl): leader_(sl) {}
+  explicit session_leader(bool sl): leader_(sl) {}
   bool leader_ = false;
 };
 
 struct shell {
-  shell(bool s): shell_(s) {}
+  explicit shell(bool s): shell_(s) {}
   bool shell_ = false;
 };
 
@@ -742,7 +742,7 @@ struct environment
 {
   environment(env_map_t&& env):
     env_(std::move(env)) {}
-  environment(const env_map_t& env):
+  explicit environment(const env_map_t& env):
     env_(env) {}
   env_map_t env_;
 };
@@ -773,17 +773,17 @@ enum IOTYPE {
 struct input
 {
   // For an already existing file descriptor.
-  input(int fd): rd_ch_(fd) {}
+  explicit input(int fd): rd_ch_(fd) {}
 
   // FILE pointer.
-  input (FILE* fp):input(fileno(fp)) { assert(fp); }
+  explicit input (FILE* fp):input(fileno(fp)) { assert(fp); }
 
-  input(const char* filename) {
+  explicit input(const char* filename) {
     int fd = open(filename, O_RDONLY);
     if (fd == -1) throw OSError("File not found: ", errno);
     rd_ch_ = fd;
   }
-  input(IOTYPE typ) {
+  explicit input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
 #ifndef __USING_WINDOWS__    
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
@@ -807,16 +807,16 @@ struct input
  */
 struct output
 {
-  output(int fd): wr_ch_(fd) {}
+  explicit output(int fd): wr_ch_(fd) {}
 
-  output (FILE* fp):output(fileno(fp)) { assert(fp); }
+  explicit output (FILE* fp):output(fileno(fp)) { assert(fp); }
 
-  output(const char* filename) {
+  explicit output(const char* filename) {
     int fd = open(filename, O_APPEND | O_CREAT | O_RDWR, 0640);
     if (fd == -1) throw OSError("File not found: ", errno);
     wr_ch_ = fd;
   }
-  output(IOTYPE typ) {
+  explicit output(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
 #ifndef __USING_WINDOWS__
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
@@ -838,16 +838,16 @@ struct output
  */
 struct error
 {
-  error(int fd): wr_ch_(fd) {}
+  explicit error(int fd): wr_ch_(fd) {}
 
-  error(FILE* fp):error(fileno(fp)) { assert(fp); }
+  explicit error(FILE* fp):error(fileno(fp)) { assert(fp); }
 
-  error(const char* filename) {
+  explicit error(const char* filename) {
     int fd = open(filename, O_APPEND | O_CREAT | O_RDWR, 0640);
     if (fd == -1) throw OSError("File not found: ", errno);
     wr_ch_ = fd;
   }
-  error(IOTYPE typ) {
+  explicit error(IOTYPE typ) {
     assert ((typ == PIPE || typ == STDOUT) && "STDERR not aloowed");
     if (typ == PIPE) {
 #ifndef __USING_WINDOWS__
@@ -879,7 +879,7 @@ public:
   preexec_func() {}
 
   template <typename Func>
-  preexec_func(Func f): holder_(new FuncHolder<Func>(std::move(f)))
+  explicit preexec_func(Func f): holder_(new FuncHolder<Func>(std::move(f)))
   {}
 
   void operator()() {
@@ -920,7 +920,7 @@ class Buffer
 {
 public:
   Buffer() {}
-  Buffer(size_t cap) { buf.resize(cap); }
+  explicit Buffer(size_t cap) { buf.resize(cap); }
   void add_cap(size_t cap) { buf.resize(cap); }
 
 #if 0
