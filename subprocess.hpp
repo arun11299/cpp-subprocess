@@ -34,22 +34,22 @@ Documentation for C++ subprocessing libraray.
 #ifndef SUBPROCESS_HPP
 #define SUBPROCESS_HPP
 
-#include <map>
 #include <algorithm>
-#include <iostream>
-#include <string>
-#include <cstdlib>
 #include <cassert>
-#include <cstring>
-#include <cstdio>
 #include <csignal>
-#include <future>
-#include <vector>
-#include <sstream>
-#include <memory>
-#include <initializer_list>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <exception>
+#include <future>
+#include <initializer_list>
+#include <iostream>
 #include <locale>
+#include <map>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #if (defined _MSC_VER) || (defined __MINGW32__)
   #define __USING_WINDOWS__
@@ -68,9 +68,9 @@ extern "C" {
   #include <sys/wait.h>
   #include <unistd.h>
 #endif
+  #include <csignal>
   #include <fcntl.h>
   #include <sys/types.h>
-  #include <signal.h>
 }
 
 /*!
