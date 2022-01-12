@@ -9,4 +9,4 @@ if(BUILD_TESTING)
     add_subdirectory(test)
 endif()
 
-install(FILES subprocess.hpp DESTINATION include/subprocess/)
+install(FILES subprocess.hpp DESTINATION include/cpp-subprocess/)
