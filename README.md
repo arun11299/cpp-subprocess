@@ -22,7 +22,7 @@ and they will be fixed as they are reported.
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
 
 ```cpp
-#inlcude "subprocess.hpp"
+#inlcude "cpp-subprocess/subprocess.hpp"
 
 using namespace subprocess;
 // OR
