@@ -123,8 +123,9 @@ static const size_t DEFAULT_BUF_CAP_BYTES = 8192;
 class CalledProcessError: public std::runtime_error
 {
 public:
-  explicit CalledProcessError(const std::string& error_msg):
-    std::runtime_error(error_msg)
+  int retcode;
+  CalledProcessError(const std::string& error_msg, int retcode):
+    std::runtime_error(error_msg), retcode(retcode)
   {}
 };
 
@@ -1630,10 +1631,10 @@ inline void Popen::execute_process() noexcept(false)
         // Call waitpid to reap the child process
         // waitpid suspends the calling process until the
         // child terminates.
-        wait();
+        int retcode = wait();
 
         // Throw whatever information we have about child failure
-        throw CalledProcessError(err_buf);
+        throw CalledProcessError(err_buf, retcode);
       }
     } catch (std::exception& exp) {
       stream_.cleanup_fds();
@@ -1984,9 +1985,9 @@ namespace detail
     static_assert(!detail::has_type<output, detail::param_pack<Args...>>::value, "output not allowed in args");
     auto p = Popen(std::forward<F>(farg), std::forward<Args>(args)..., output{PIPE});
     auto res = p.communicate();
-    auto retcode = p.poll();
+    auto retcode = p.retcode();
     if (retcode > 0) {
-      throw CalledProcessError("Command failed : Non zero retcode");
+      throw CalledProcessError("Command failed : Non zero retcode", retcode);
     }
     return std::move(res.first);
   }

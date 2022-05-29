@@ -27,9 +27,25 @@ void test_ret_code_comm()
   std::cout << "retcode: " << cut.retcode() << std::endl;
 }
 
+void test_ret_code_check_output()
+{
+  using namespace sp;
+  bool caught = false;
+  try {
+      auto obuf = check_output({"/bin/false"}, shell{false});
+      assert(false); // Expected to throw
+  } catch (CalledProcessError &e) {
+      std::cout << "retcode: " << e.retcode << std::endl;
+      assert (e.retcode == 1);
+      caught = true;
+  }
+  assert(caught);
+}
+
 int main() {
   // test_ret_code();
   test_ret_code_comm();
+  test_ret_code_check_output();
 
   return 0;
 }
