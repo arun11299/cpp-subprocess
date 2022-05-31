@@ -870,7 +870,7 @@ struct error
 // needed to provide the functionality of preexec_func
 // ATTN: Can be used only to execute functions with no
 // arguments and returning void.
-// Could have used more efficient methods, ofcourse, but
+// Could have used more efficient methods, of course, but
 // that wont yield me the consistent syntax which I am
 // aiming for. If you know, then please do let me know.
 
