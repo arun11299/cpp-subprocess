@@ -1298,6 +1298,11 @@ public:
     return res;
   }
 
+  std::pair<OutBuffer, ErrBuffer> communicate(const std::string& msg)
+  {
+    return communicate(msg.c_str(), msg.size());
+  }
+
   std::pair<OutBuffer, ErrBuffer> communicate(const std::vector<char>& msg)
   {
     auto res = stream_.communicate(msg);
