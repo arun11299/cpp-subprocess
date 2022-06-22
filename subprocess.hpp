@@ -1288,6 +1288,9 @@ public:
   int send(const char* msg, size_t length)
   { return stream_.send(msg, length); }
 
+  int send(const std::string& msg)
+  { return send(msg.c_str(), msg.size()); }
+
   int send(const std::vector<char>& msg)
   { return stream_.send(msg); }
 
