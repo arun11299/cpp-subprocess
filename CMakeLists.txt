@@ -4,6 +4,10 @@ project(subprocess CXX)
 
 set(CMAKE_CXX_STANDARD 11)
 
+# Options
+option(BUILD_TESTING "Build tests" OFF)
+
+# Tests
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(test)

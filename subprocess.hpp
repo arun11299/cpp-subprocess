@@ -786,7 +786,7 @@ struct input
   }
   explicit input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef __USING_WINDOWS__    
+#ifndef __USING_WINDOWS__
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -2050,6 +2050,11 @@ int call(const std::string& arg, Args&&... args)
   return (detail::call_impl(arg, std::forward<Args>(args)...));
 }
 
+template <typename... Args>
+int call(std::vector<std::string> plist, Args &&... args)
+{
+  return (detail::call_impl(plist, std::forward<Args>(args)...));
+}
 
 /*!
  * Run the command with arguments and wait for it to complete.
