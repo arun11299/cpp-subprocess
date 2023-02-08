@@ -22,11 +22,11 @@ and they will be fixed as they are reported.
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
 
 ```cpp
-#inlcude "cpp-subprocess/subprocess.hpp"
+#include "cpp-subprocess/subprocess.hpp"
 
 using namespace subprocess;
 // OR
-// namespace sp = subprocess; 
+// namespace sp = subprocess;
 // Or give any other alias you like.
 ```
 to the files where you want to make use of subprocessing. Make sure to add necessary switches to add C++11 support (-std=c++11 in g++ and clang).
@@ -35,7 +35,7 @@ Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-moder
 
 ## Compiler Support
 Linux - g++ 4.8 and above
-Mac OS - Clang 3.4 and later 
+Mac OS - Clang 3.4 and later
 Windows - MSVC 2015 and above
 
 ## Examples
