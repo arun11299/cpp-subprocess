@@ -165,7 +165,7 @@ using env_vector_t = std::vector<env_char_t>;
 namespace util
 {
   template <typename R>
-  inline bool is_ready(std::shared_future<R> const &f)
+  bool is_ready(std::shared_future<R> const &f)
   {
     return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
   }
@@ -405,7 +405,7 @@ namespace util
    *                to be split. Default constructed to ' '(space) and '\t'(tab)
    * [out] vector<string> : Vector of strings split at deleimiter.
    */
-  static inline std::vector<std::string>
+  inline std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
   {
     std::vector<std::string> res;
@@ -435,7 +435,7 @@ namespace util
    *             Default constructed to ' ' (space).
    *  [out] string: Joined string.
    */
-  static inline
+  inline
   std::string join(const std::vector<std::string>& vec,
                    const std::string& sep = " ")
   {
@@ -456,7 +456,7 @@ namespace util
    * [in] set : If 'true', set FD_CLOEXEC.
    *            If 'false' unset FD_CLOEXEC.
    */
-  static inline
+  inline
   void set_clo_on_exec(int fd, bool set = true)
   {
     int flags = fcntl(fd, F_GETFD, 0);
@@ -476,7 +476,7 @@ namespace util
    *         First element of pair is the read descriptor of pipe.
    *         Second element is the write descriptor of pipe.
    */
-  static inline
+  inline
   std::pair<int, int> pipe_cloexec() noexcept(false)
   {
     int pipe_fds[2];
@@ -504,7 +504,7 @@ namespace util
    *              `buf` to `fd`.
    * [out] int : Number of bytes written or -1 in case of failure.
    */
-  static inline
+  inline
   int write_n(int fd, const char* buf, size_t length)
   {
     size_t nwritten = 0;
@@ -531,7 +531,7 @@ namespace util
    *  will retry to read from `fd`, but only till the EINTR counter
    *  reaches 50 after which it will return with whatever data it read.
    */
-  static inline
+  inline
   int read_atmost_n(FILE* fp, char* buf, size_t read_upto)
   {
 #ifdef __USING_WINDOWS__
@@ -573,7 +573,7 @@ namespace util
    * NOTE: `class Buffer` is a exposed public class. See below.
    */
 
-  static inline int read_all(FILE* fp, std::vector<char>& buf)
+  inline int read_all(FILE* fp, std::vector<char>& buf)
   {
     auto buffer = buf.data();
     int total_bytes_read = 0;
@@ -621,7 +621,7 @@ namespace util
    *  NOTE: This is a blocking call as in, it will loop
    *  till the child is exited.
    */
-  static inline
+  inline
   std::pair<int, int> wait_for_child_exit(int pid)
   {
     int status = 0;
@@ -786,7 +786,7 @@ struct input
   }
   explicit input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef __USING_WINDOWS__    
+#ifndef __USING_WINDOWS__
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -1371,7 +1371,7 @@ inline void Popen::init_args() {
 }
 
 template <typename F, typename... Args>
-inline void Popen::init_args(F&& farg, Args&&... args)
+void Popen::init_args(F&& farg, Args&&... args)
 {
   detail::ArgumentDeducer argd(this);
   argd.set_option(std::forward<F>(farg));
@@ -2006,13 +2006,13 @@ namespace detail
     return Popen(std::forward<F>(farg), std::forward<Args>(args)...).wait();
   }
 
-  static inline void pipeline_impl(std::vector<Popen>& cmds)
+  inline void pipeline_impl(std::vector<Popen>& cmds)
   {
     /* EMPTY IMPL */
   }
 
   template<typename... Args>
-  static inline void pipeline_impl(std::vector<Popen>& cmds,
+  void pipeline_impl(std::vector<Popen>& cmds,
                                    const std::string& cmd,
                                    Args&&... args)
   {
