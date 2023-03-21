@@ -6,6 +6,6 @@ compiler:
 
 script:
   - mkdir -p build && cd build
-  - cmake -DCMAKE_BUILD_TYPE=Debug ..
+  - cmake -DCMAKE_BUILD_TYPE=Debug -DSUBPROCESS_TESTS=ON ..
   - cmake --build . --config Debug -- -j $(nproc)
   - ctest -j $(nproc) --output-on-failure
