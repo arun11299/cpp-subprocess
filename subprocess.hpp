@@ -1524,7 +1524,7 @@ inline void Popen::execute_process() noexcept(false)
   PROCESS_INFORMATION piProcInfo;
   STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
-  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW;
 
   // Set up members of the PROCESS_INFORMATION structure.
   ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
