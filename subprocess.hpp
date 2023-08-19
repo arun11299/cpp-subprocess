@@ -178,9 +178,9 @@ namespace util
     // need to do so --- hopefully avoid problems if programs won't
     // parse quotes properly
     //
-
-    if (force == false && argument.empty() == false &&
-        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
+    bool containsCharThatNeedsQuoting = argument.find_first_of(L" \t\n\v\"") != argument.npos;
+    bool containsCharThatNeedsNoQuoting = argument.find_first_of(L"/") != argument.npos;
+    if (!force && !argument.empty() && (!containsCharThatNeedsQuoting || containsCharThatNeedsNoQuoting)) {
       command_line.append(argument);
     }
     else {
@@ -1514,7 +1514,7 @@ inline void Popen::execute_process() noexcept(false)
 
   for (auto arg : this->vargs_) {
     argument = converter.from_bytes(arg);
-    util::quote_argument(argument, command_line, true);
+    util::quote_argument(argument, command_line, false);
     command_line += L" ";
   }
 
@@ -1524,7 +1524,7 @@ inline void Popen::execute_process() noexcept(false)
   PROCESS_INFORMATION piProcInfo;
   STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
-  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW;
 
   // Set up members of the PROCESS_INFORMATION structure.
   ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
@@ -2048,6 +2048,12 @@ template<typename... Args>
 int call(const std::string& arg, Args&&... args)
 {
   return (detail::call_impl(arg, std::forward<Args>(args)...));
+}
+
+template <typename... Args>
+int call(std::vector<std::string> plist, Args &&... args)
+{
+  return (detail::call_impl(plist, std::forward<Args>(args)...));
 }
 
 
