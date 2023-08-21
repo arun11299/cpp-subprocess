@@ -64,6 +64,10 @@ extern "C" {
   #include <Windows.h>
   #include <io.h>
   #include <cwchar>
+
+  #define close _close
+  #define open _open
+  #define fileno _fileno
 #else
   #include <sys/wait.h>
   #include <unistd.h>
