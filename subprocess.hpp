@@ -178,9 +178,9 @@ namespace util
     // need to do so --- hopefully avoid problems if programs won't
     // parse quotes properly
     //
-    bool containsCharThatNeedsQuoting = argument.find_first_of(L" \t\n\v\"") != argument.npos;
-    bool containsCharThatNeedsNoQuoting = argument.find_first_of(L"/") != argument.npos;
-    if (!force && !argument.empty() && (!containsCharThatNeedsQuoting || containsCharThatNeedsNoQuoting)) {
+
+    if (force == false && argument.empty() == false &&
+        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
       command_line.append(argument);
     }
     else {
