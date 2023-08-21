@@ -58,6 +58,8 @@ void test_buffer_growth_threaded_comm()
 }
 
 int main() {
+#ifndef __USING_WINDOWS__
+
   // test_cat_pipe_redirection();
   test_cat_send_terminate();
   /*
@@ -65,5 +67,8 @@ int main() {
   test_buffer_growth();
   test_buffer_growth_threaded_comm();
   */
+
+#endif
+
   return 0;
 }
