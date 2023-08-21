@@ -11,6 +11,8 @@ void test_redirect()
 }
 
 int main() {
+#ifndef __USING_WINDOWS__
   test_redirect();
+#endif
   return 0;
 }

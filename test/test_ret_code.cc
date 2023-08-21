@@ -44,8 +44,10 @@ void test_ret_code_check_output()
 
 int main() {
   // test_ret_code();
+#ifndef __USING_WINDOWS__
   test_ret_code_comm();
   test_ret_code_check_output();
+#endif
 
   return 0;
 }
