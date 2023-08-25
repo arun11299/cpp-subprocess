@@ -627,7 +627,7 @@ namespace util
     int status = 0;
     int ret = -1;
     while (1) {
-      ret = waitpid(pid, &status, WNOHANG);
+      ret = waitpid(pid, &status, 0);
       if (ret == -1) break;
       if (ret == 0) continue;
       return std::make_pair(ret, status);
