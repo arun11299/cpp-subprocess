@@ -3,6 +3,8 @@
 
 using namespace subprocess;
 
+#ifndef __USING_WINDOWS__
+
 void test_env()
 {
   int st= Popen("./env_script.sh", environment{{
@@ -13,7 +15,11 @@ void test_env()
   assert (st == 0);
 }
 
+#endif
+
 int main() {
+#ifndef __USING_WINDOWS__
   test_env();
+#endif
   return 0;
 }

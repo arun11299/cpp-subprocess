@@ -3,7 +3,7 @@ project(subprocess VERSION 0.0.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 11 CACHE STRING "C++ standard to use")
 option(EXPORT_COMPILE_COMMANDS "create clang compile database" ON)
-option(SUBPROCESS_TESTS "enalbe subprocess tests" OFF)
+option(SUBPROCESS_TESTS "enable subprocess tests" OFF)
 
 find_package(Threads REQUIRED)
 

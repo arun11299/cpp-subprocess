@@ -5,7 +5,7 @@ using namespace subprocess;
 
 void test_exename()
 {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   auto ret = call({"--version"}, executable{"cmake"}, shell{false});
 #else
   auto ret = call({"-l"}, executable{"ls"}, shell{false});
@@ -39,7 +39,7 @@ void test_easy_piping()
 
 void test_shell()
 {
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
   auto obuf = check_output({"cmake", "--version"}, shell{false});
 #else
   auto obuf = check_output({"ls", "-l"}, shell{false});  
@@ -54,7 +54,7 @@ void test_sleep()
   while (p.poll() == -1)
   {
     std::cout << "Waiting..." << std::endl;
-#ifdef _MSC_VER
+#ifdef __USING_WINDOWS__
 #else
     sleep(1);
 #endif

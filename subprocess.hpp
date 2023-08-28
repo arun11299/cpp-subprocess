@@ -64,6 +64,10 @@ extern "C" {
   #include <Windows.h>
   #include <io.h>
   #include <cwchar>
+
+  #define close _close
+  #define open _open
+  #define fileno _fileno
 #else
   #include <sys/wait.h>
   #include <unistd.h>
@@ -178,9 +182,9 @@ namespace util
     // need to do so --- hopefully avoid problems if programs won't
     // parse quotes properly
     //
-    bool containsCharThatNeedsQuoting = argument.find_first_of(L" \t\n\v\"") != argument.npos;
-    bool containsCharThatNeedsNoQuoting = argument.find_first_of(L"/") != argument.npos;
-    if (!force && !argument.empty() && (!containsCharThatNeedsQuoting || containsCharThatNeedsNoQuoting)) {
+
+    if (force == false && argument.empty() == false &&
+        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
       command_line.append(argument);
     }
     else {
