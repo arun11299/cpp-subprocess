@@ -1427,8 +1427,6 @@ inline int Popen::wait() noexcept(false)
 
 inline int Popen::poll() noexcept(false)
 {
-  int status;
-
 #ifndef _MSC_VER
   if (!child_created_) return -1; // TODO: ??
 #endif
@@ -1436,13 +1434,7 @@ inline int Popen::poll() noexcept(false)
 #ifdef __USING_WINDOWS__
   int ret = WaitForSingleObject(process_handle_, 0);
   if (ret != WAIT_OBJECT_0) return -1;
-#else
-  // Returns zero if child is still running
-  int ret = waitpid(child_pid_, &status, WNOHANG);
-  if (ret == 0) return -1;
-#endif
 
-#ifdef __USING_WINDOWS__
   DWORD dretcode_;
   if (FALSE == GetExitCodeProcess(process_handle_, &dretcode_))
       throw OSError("GetExitCodeProcess", 0);
@@ -1452,6 +1444,12 @@ inline int Popen::poll() noexcept(false)
 
   return retcode_;
 #else
+  int status;
+
+  // Returns zero if child is still running
+  int ret = waitpid(child_pid_, &status, WNOHANG);
+  if (ret == 0) return -1;
+
   if (ret == child_pid_) {
     if (WIFSIGNALED(status)) {
       retcode_ = WTERMSIG(status);
