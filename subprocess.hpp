@@ -1537,7 +1537,7 @@ inline void Popen::execute_process() noexcept(false)
   ZeroMemory(&siStartInfo, sizeof(STARTUPINFOW));
   siStartInfo.cb = sizeof(STARTUPINFOW);
 
-  siStartInfo.hStdError = this->stream_.g_hChildStd_OUT_Wr;
+  siStartInfo.hStdError = this->stream_.g_hChildStd_ERR_Wr;
   siStartInfo.hStdOutput = this->stream_.g_hChildStd_OUT_Wr;
   siStartInfo.hStdInput = this->stream_.g_hChildStd_IN_Rd;
 
