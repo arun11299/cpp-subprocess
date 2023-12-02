@@ -790,7 +790,7 @@ struct input
   }
   explicit input(IOTYPE typ) {
     assert (typ == PIPE && "STDOUT/STDERR not allowed");
-#ifndef __USING_WINDOWS__    
+#ifndef __USING_WINDOWS__
     std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
 #endif
   }
@@ -1427,10 +1427,6 @@ inline int Popen::wait() noexcept(false)
 
 inline int Popen::poll() noexcept(false)
 {
-#ifndef _MSC_VER
-  if (!child_created_) return -1; // TODO: ??
-#endif
-
 #ifdef __USING_WINDOWS__
   int ret = WaitForSingleObject(process_handle_, 0);
   if (ret != WAIT_OBJECT_0) return -1;
@@ -1444,6 +1440,8 @@ inline int Popen::poll() noexcept(false)
 
   return retcode_;
 #else
+  if (!child_created_) return -1; // TODO: ??
+
   int status;
 
   // Returns zero if child is still running

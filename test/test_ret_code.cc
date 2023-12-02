@@ -6,9 +6,15 @@ namespace sp = subprocess;
 void test_ret_code()
 {
   std::cout << "Test::test_poll_ret_code" << std::endl;
+#ifdef __USING_WINDOWS__
+  auto p = sp::Popen({"cmd.exe", "/c", "exit", "1"});
+#else
   auto p = sp::Popen({"/usr/bin/false"});
+#endif
   while (p.poll() == -1) {
-#ifndef _MSC_VER
+#ifdef __USING_WINDOWS__
+    Sleep(100);
+#else
     usleep(1000 * 100);
 #endif
   }
@@ -43,7 +49,7 @@ void test_ret_code_check_output()
 }
 
 int main() {
-  // test_ret_code();
+  test_ret_code();
 #ifndef __USING_WINDOWS__
   test_ret_code_comm();
   test_ret_code_check_output();
