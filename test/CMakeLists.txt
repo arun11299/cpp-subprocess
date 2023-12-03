@@ -19,3 +19,17 @@ foreach(test_file IN LISTS test_files)
         COPYONLY
     )
 endforeach()
+
+
+set(TEST_REDIRECTION_PYTHON_SCRIPT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/test_redirection.py)
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_redirection.cc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/test_redirection.cc
+    @ONLY
+)
+add_executable(test_redirection ${CMAKE_CURRENT_BINARY_DIR}/test_redirection.cc)
+target_link_libraries(test_redirection PRIVATE subprocess)
+add_test(
+    NAME test_redirection
+    COMMAND $<TARGET_FILE:test_redirection>
+)
