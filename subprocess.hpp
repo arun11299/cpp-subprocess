@@ -148,7 +148,7 @@ class OSError: public std::runtime_error
 {
 public:
   OSError(const std::string& err_msg, int err_code):
-    std::runtime_error( err_msg + " : " + std::strerror(err_code) )
+    std::runtime_error( err_msg + ": " + std::strerror(err_code) )
   {}
 };
 
@@ -235,16 +235,15 @@ namespace util
   }
 
 #ifdef __USING_WINDOWS__
-  inline std::string get_last_error()
+  inline std::string get_last_error(DWORD errorMessageID)
   {
-    DWORD errorMessageID = ::GetLastError();
     if (errorMessageID == 0)
       return std::string();
 
     LPSTR messageBuffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
+            FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
         NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (LPSTR)&messageBuffer, 0, NULL);
 
@@ -1554,8 +1553,10 @@ inline void Popen::execute_process() noexcept(false)
                             &piProcInfo); // receives PROCESS_INFORMATION
 
   // If an error occurs, exit the application.
-  if (!bSuccess)
-    throw OSError("CreateProcessW failed", 0);
+  if (!bSuccess) {
+    DWORD errorMessageID = ::GetLastError();
+    throw CalledProcessError("CreateProcess failed: " + util::get_last_error(errorMessageID), errorMessageID);
+  }
 
   CloseHandle(piProcInfo.hThread);
 
