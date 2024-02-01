@@ -155,7 +155,7 @@ public:
 //--------------------------------------------------------------------
 
 //Environment Variable types
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
 	using env_string_t = std::string;
 	using env_char_t = char;
 #else
