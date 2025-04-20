@@ -156,14 +156,16 @@ public:
 
 //Environment Variable types
 #ifndef _MSC_VER
-	using env_string_t = std::string;
-	using env_char_t = char;
+	using platform_str_t = std::string;
+	using platform_char_t = char;
 #else
-	using env_string_t = std::wstring;
-	using env_char_t = wchar_t;
+	using platform_str_t = std::wstring;
+	using platform_char_t = wchar_t;
 #endif
-using env_map_t = std::map<env_string_t, env_string_t>;
-using env_vector_t = std::vector<env_char_t>;
+using env_str_t = platform_str_t;
+using env_char_t = platform_char_t;
+using env_map_t = std::map<platform_str_t, platform_str_t>;
+using env_vector_t = std::vector<platform_char_t>;
 
 //--------------------------------------------------------------------
 namespace util
@@ -333,14 +335,14 @@ namespace util
       while (*variable_strings_ptr)
       {
           // Create a string from Variable String
-          env_string_t current_line(variable_strings_ptr);
+          platform_str_t current_line(variable_strings_ptr);
           // Find the first "equals" sign.
           auto pos = current_line.find(delimeter);
           // Assuming it's not missing ...
           if(pos!=std::wstring::npos){
               // ... parse the key and value.
-              env_string_t key = current_line.substr(0, pos);
-              env_string_t value = current_line.substr(pos + del_len);
+              platform_str_t key = current_line.substr(0, pos);
+              platform_str_t value = current_line.substr(pos + del_len);
               // Map the entry.
               mapped_environment[key] = value;
           }
@@ -368,7 +370,7 @@ namespace util
 	// And fill'er up.
 	for(auto kv: source_map){
 	  // Create the line
-	  env_string_t current_line(kv.first); current_line += L"="; current_line += kv.second;
+	  platform_str_t current_line(kv.first); current_line += L"="; current_line += kv.second;
 	  // Add the line to the buffer.
 	  std::copy(current_line.begin(), current_line.end(), std::back_inserter(environment_map_buffer));
 	  // Append a null
@@ -730,10 +732,11 @@ struct executable: string_arg
  *
  * Eg: cwd{"/som/path/x"}
  */
-struct cwd: string_arg
+struct cwd
 {
-  template <typename T>
-  cwd(T&& arg): string_arg(std::forward<T>(arg)) {}
+  explicit cwd(const platform_str_t &cwd): cwd_(cwd) {}
+  explicit cwd(platform_str_t &&cwd): cwd_(std::move(cwd)) {}
+  platform_str_t cwd_;
 };
 
 /*!
@@ -1352,7 +1355,7 @@ private:
   bool session_leader_ = false;
 
   std::string exe_name_;
-  std::string cwd_;
+  platform_str_t cwd_;
   env_map_t env_;
   preexec_func preexec_fn_;
 
@@ -1540,6 +1543,8 @@ inline void Popen::execute_process() noexcept(false)
 
   siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
+  const wchar_t *cwd_arg = this->cwd_.empty() ? NULL : cwd_.c_str();
+
   // Create the child process.
   bSuccess = CreateProcessW(NULL,
                             szCmdline,    // command line
@@ -1548,7 +1553,7 @@ inline void Popen::execute_process() noexcept(false)
                             TRUE,         // handles are inherited
                             creation_flags,	// creation flags
                             environment_string_table_ptr,  // use provided environment
-                            NULL,         // use parent's current directory
+                            cwd_arg,      // use provided current directory
                             &siStartInfo, // STARTUPINFOW pointer
                             &piProcInfo); // receives PROCESS_INFORMATION
 
@@ -1663,7 +1668,7 @@ namespace detail {
   }
 
   inline void ArgumentDeducer::set_option(cwd&& cwdir) {
-    popen_->cwd_ = std::move(cwdir.arg_value);
+    popen_->cwd_ = std::move(cwdir.cwd_);
   }
 
   inline void ArgumentDeducer::set_option(bufsize&& bsiz) {
