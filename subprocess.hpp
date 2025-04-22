@@ -156,14 +156,16 @@ public:
 
 //Environment Variable types
 #ifndef __USING_WINDOWS__
-	using env_string_t = std::string;
-	using env_char_t = char;
+	using platform_str_t = std::string;
+	using platform_char_t = char;
 #else
-	using env_string_t = std::wstring;
-	using env_char_t = wchar_t;
+	using platform_str_t = std::wstring;
+	using platform_char_t = wchar_t;
 #endif
-using env_map_t = std::map<env_string_t, env_string_t>;
-using env_vector_t = std::vector<env_char_t>;
+using env_str_t = platform_str_t;
+using env_char_t = platform_char_t;
+using env_map_t = std::map<platform_str_t, platform_str_t>;
+using env_vector_t = std::vector<platform_char_t>;
 
 //--------------------------------------------------------------------
 namespace util
@@ -333,14 +335,14 @@ namespace util
       while (*variable_strings_ptr)
       {
           // Create a string from Variable String
-          env_string_t current_line(variable_strings_ptr);
+          platform_str_t current_line(variable_strings_ptr);
           // Find the first "equals" sign.
           auto pos = current_line.find(delimeter);
           // Assuming it's not missing ...
           if(pos!=std::wstring::npos){
               // ... parse the key and value.
-              env_string_t key = current_line.substr(0, pos);
-              env_string_t value = current_line.substr(pos + del_len);
+              platform_str_t key = current_line.substr(0, pos);
+              platform_str_t value = current_line.substr(pos + del_len);
               // Map the entry.
               mapped_environment[key] = value;
           }
@@ -368,7 +370,7 @@ namespace util
 	// And fill'er up.
 	for(auto kv: source_map){
 	  // Create the line
-	  env_string_t current_line(kv.first); current_line += L"="; current_line += kv.second;
+	  platform_str_t current_line(kv.first); current_line += L"="; current_line += kv.second;
 	  // Add the line to the buffer.
 	  std::copy(current_line.begin(), current_line.end(), std::back_inserter(environment_map_buffer));
 	  // Append a null
@@ -706,7 +708,7 @@ struct string_arg
 {
   string_arg(const char* arg): arg_value(arg) {}
   string_arg(std::string&& arg): arg_value(std::move(arg)) {}
-  string_arg(std::string arg): arg_value(std::move(arg)) {}
+  string_arg(const std::string& arg): arg_value(arg) {}
   std::string arg_value;
 };
 
@@ -730,10 +732,11 @@ struct executable: string_arg
  *
  * Eg: cwd{"/som/path/x"}
  */
-struct cwd: string_arg
+struct cwd
 {
-  template <typename T>
-  cwd(T&& arg): string_arg(std::forward<T>(arg)) {}
+  explicit cwd(const platform_str_t &cwd): cwd_(cwd) {}
+  explicit cwd(platform_str_t &&cwd): cwd_(std::move(cwd)) {}
+  platform_str_t cwd_;
 };
 
 /*!
@@ -1352,7 +1355,7 @@ private:
   bool session_leader_ = false;
 
   std::string exe_name_;
-  std::string cwd_;
+  platform_str_t cwd_;
   env_map_t env_;
   preexec_func preexec_fn_;
 
@@ -1408,7 +1411,12 @@ inline int Popen::wait() noexcept(false)
 #ifdef __USING_WINDOWS__
   int ret = WaitForSingleObject(process_handle_, INFINITE);
 
-  return 0;
+  DWORD dretcode_;
+
+  if (FALSE == GetExitCodeProcess(process_handle_, &dretcode_))
+      throw OSError("Failed during call to GetExitCodeProcess", 0);
+
+  return (int)dretcode_;
 #else
   int ret, status;
   std::tie(ret, status) = util::wait_for_child_exit(pid());
@@ -1540,6 +1548,8 @@ inline void Popen::execute_process() noexcept(false)
 
   siStartInfo.dwFlags |= STARTF_USESTDHANDLES;
 
+  const wchar_t *cwd_arg = this->cwd_.empty() ? NULL : cwd_.c_str();
+
   // Create the child process.
   bSuccess = CreateProcessW(NULL,
                             szCmdline,    // command line
@@ -1548,7 +1558,7 @@ inline void Popen::execute_process() noexcept(false)
                             TRUE,         // handles are inherited
                             creation_flags,	// creation flags
                             environment_string_table_ptr,  // use provided environment
-                            NULL,         // use parent's current directory
+                            cwd_arg,      // use provided current directory
                             &siStartInfo, // STARTUPINFOW pointer
                             &piProcInfo); // receives PROCESS_INFORMATION
 
@@ -1630,11 +1640,13 @@ inline void Popen::execute_process() noexcept(false)
     try {
       char err_buf[SP_MAX_ERR_BUF_SIZ] = {0,};
 
-      int read_bytes = util::read_atmost_n(
-                                  fdopen(err_rd_pipe, "r"),
-                                  err_buf,
-                                  SP_MAX_ERR_BUF_SIZ);
-      close(err_rd_pipe);
+      FILE* err_fp = fdopen(err_rd_pipe, "r");
+      if (!err_fp) {
+          close(err_rd_pipe);
+          throw OSError("fdopen failed", errno);
+      }
+      int read_bytes = util::read_atmost_n(err_fp, err_buf, SP_MAX_ERR_BUF_SIZ);
+      fclose(err_fp);
 
       if (read_bytes || strlen(err_buf)) {
         // Call waitpid to reap the child process
@@ -1661,7 +1673,7 @@ namespace detail {
   }
 
   inline void ArgumentDeducer::set_option(cwd&& cwdir) {
-    popen_->cwd_ = std::move(cwdir.arg_value);
+    popen_->cwd_ = std::move(cwdir.cwd_);
   }
 
   inline void ArgumentDeducer::set_option(bufsize&& bsiz) {
