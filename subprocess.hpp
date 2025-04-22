@@ -61,7 +61,7 @@ Documentation for C++ subprocessing libraray.
 
 extern "C" {
 #ifdef __USING_WINDOWS__
-  #include <Windows.h>
+  #include <windows.h>
   #include <io.h>
   #include <cwchar>
 
@@ -155,7 +155,7 @@ public:
 //--------------------------------------------------------------------
 
 //Environment Variable types
-#ifndef _MSC_VER
+#ifndef __USING_WINDOWS__
 	using platform_str_t = std::string;
 	using platform_char_t = char;
 #else
