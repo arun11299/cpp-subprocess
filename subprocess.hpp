@@ -182,6 +182,7 @@ using env_vector_t = std::vector<platform_char_t>;
 //--------------------------------------------------------------------
 namespace util
 {
+#ifdef __USING_WINDOWS__
   inline void quote_argument(const std::wstring &argument, std::wstring &command_line,
                       bool force)
   {
@@ -242,7 +243,6 @@ namespace util
     }
   }
 
-#ifdef __USING_WINDOWS__
   inline std::string get_last_error(DWORD errorMessageID)
   {
     if (errorMessageID == 0)
