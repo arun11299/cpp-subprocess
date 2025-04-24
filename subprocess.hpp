@@ -1,6 +1,6 @@
 /*!
 
-Documentation for C++ subprocessing libraray.
+Documentation for C++ subprocessing library.
 
 @copyright The code is licensed under the [MIT
   License](http://opensource.org/licenses/MIT):
@@ -118,7 +118,7 @@ namespace subprocess {
 // from pipe
 static const size_t SP_MAX_ERR_BUF_SIZ = 1024;
 
-// Default buffer capcity for OutBuffer and ErrBuffer.
+// Default buffer capacity for OutBuffer and ErrBuffer.
 // If the data exceeds this capacity, the buffer size is grown
 // by 1.5 times its previous capacity
 static const size_t DEFAULT_BUF_CAP_BYTES = 8192;
@@ -326,8 +326,8 @@ namespace util
   inline env_map_t MapFromWindowsEnvironment(){
       wchar_t *variable_strings_ptr;
       wchar_t *environment_strings_ptr;
-      std::wstring delimeter(L"=");
-      int del_len = delimeter.length();
+      std::wstring delimiter(L"=");
+      int del_len = delimiter.length();
       env_map_t mapped_environment;
 
       // Get a pointer to the environment block.
@@ -349,7 +349,7 @@ namespace util
           // Create a string from Variable String
           platform_str_t current_line(variable_strings_ptr);
           // Find the first "equals" sign.
-          auto pos = current_line.find(delimeter);
+          auto pos = current_line.find(delimiter);
           // Assuming it's not missing ...
           if(pos!=std::wstring::npos){
               // ... parse the key and value.
@@ -447,8 +447,8 @@ namespace util
    * Function: join
    * Parameters:
    * [in] vec : Vector of strings which needs to be joined to form
-   *            a single string with words seperated by a seperator char.
-   *  [in] sep : String used to seperate 2 words in the joined string.
+   *            a single string with words separated by a separator char.
+   *  [in] sep : String used to separate 2 words in the joined string.
    *             Default constructed to ' ' (space).
    *  [out] string: Joined string.
    */
@@ -669,7 +669,7 @@ namespace util
  * Default value is 0.
  */
 struct bufsize {
-  explicit bufsize(int siz): bufsiz(siz) {}
+  explicit bufsize(int sz): bufsiz(sz) {}
   int  bufsiz = 0;
 };
 
@@ -725,7 +725,7 @@ struct string_arg
 };
 
 /*!
- * Option to specify the executable name seperately
+ * Option to specify the executable name separately
  * from the args sequence.
  * In this case the cmd args must only contain the
  * options required for this executable.
@@ -742,7 +742,7 @@ struct executable: string_arg
  * Option to set the current working directory
  * of the spawned process.
  *
- * Eg: cwd{"/som/path/x"}
+ * Eg: cwd{"/some/path/x"}
  */
 struct cwd
 {
@@ -867,7 +867,7 @@ struct error
     wr_ch_ = fd;
   }
   explicit error(IOTYPE typ) {
-    assert ((typ == PIPE || typ == STDOUT) && "STDERR not aloowed");
+    assert ((typ == PIPE || typ == STDOUT) && "STDERR not allowed");
     if (typ == PIPE) {
 #ifndef __USING_WINDOWS__
       std::tie(rd_ch_, wr_ch_) = util::pipe_cloexec();
@@ -889,7 +889,7 @@ struct error
 // ATTN: Can be used only to execute functions with no
 // arguments and returning void.
 // Could have used more efficient methods, ofcourse, but
-// that wont yield me the consistent syntax which I am
+// that won't yield me the consistent syntax which I am
 // aiming for. If you know, then please do let me know.
 
 class preexec_func
@@ -1232,10 +1232,10 @@ private:
  * 9. communicate(...)   - Get the output/error from the child and close the channels
  *                         from the parent side.
  *10. input()            - Get the input channel/File pointer. Can be used for
- *                         cutomizing the way of sending input to child.
+ *                         customizing the way of sending input to child.
  *11. output()           - Get the output channel/File pointer. Usually used
                            in case of redirection. See piping examples.
- *12. error()            - Get the error channel/File poiner. Usually used
+ *12. error()            - Get the error channel/File pointer. Usually used
                            in case of redirection.
  *13. start_process()    - Start the child process. Only to be used when
  *                         `defer_spawn` option was provided in Popen constructor.
@@ -1379,7 +1379,7 @@ private:
 
   // Command in string format
   std::string args_;
-  // Comamnd provided as sequence
+  // Command provided as sequence
   std::vector<std::string> vargs_;
   std::vector<char*> cargv_;
 
@@ -2059,7 +2059,7 @@ namespace detail
 }
 
 /*-----------------------------------------------------------
- *        CONVIENIENCE FUNCTIONS
+ *        CONVENIENCE FUNCTIONS
  *-----------------------------------------------------------
  */
 
