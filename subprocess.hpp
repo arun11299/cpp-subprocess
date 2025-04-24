@@ -182,12 +182,6 @@ using env_vector_t = std::vector<platform_char_t>;
 //--------------------------------------------------------------------
 namespace util
 {
-  template <typename R>
-  inline bool is_ready(std::shared_future<R> const &f)
-  {
-    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-  }
-
   inline void quote_argument(const std::wstring &argument, std::wstring &command_line,
                       bool force)
   {
