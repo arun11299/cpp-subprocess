@@ -1,4 +1,4 @@
-set(test_names test_subprocess test_cat test_env test_err_redirection test_exception test_split test_main test_ret_code)
+set(test_names test_subprocess test_cat test_double_quotes test_env test_err_redirection test_exception test_split test_main test_ret_code)
 set(test_files env_script.sh write_err.sh write_err.txt)
 
 
