@@ -182,12 +182,7 @@ using env_vector_t = std::vector<platform_char_t>;
 //--------------------------------------------------------------------
 namespace util
 {
-  template <typename R>
-  inline bool is_ready(std::shared_future<R> const &f)
-  {
-    return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-  }
-
+#ifdef __USING_WINDOWS__
   inline void quote_argument(const std::wstring &argument, std::wstring &command_line,
                       bool force)
   {
@@ -198,7 +193,7 @@ namespace util
     //
 
     if (force == false && argument.empty() == false &&
-        argument.find_first_of(L" \t\n\v\"") == argument.npos) {
+        argument.find_first_of(L" \t\n\v") == argument.npos) {
       command_line.append(argument);
     }
     else {
@@ -248,7 +243,6 @@ namespace util
     }
   }
 
-#ifdef __USING_WINDOWS__
   inline std::string get_last_error(DWORD errorMessageID)
   {
     if (errorMessageID == 0)
