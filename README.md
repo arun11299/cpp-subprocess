@@ -22,7 +22,7 @@ and they will be fixed as they are reported.
 Subprocess library has just a single source `subprocess.hpp` present at the top directory of this repository. All you need to do is add
 
 ```cpp
-#inlcude "cpp-subprocess/subprocess.hpp"
+#include "cpp-subprocess/subprocess.hpp"
 
 using namespace subprocess;
 // OR
@@ -32,6 +32,20 @@ using namespace subprocess;
 to the files where you want to make use of subprocessing. Make sure to add necessary switches to add C++11 support (-std=c++11 in g++ and clang).
 
 Checkout http://templated-thoughts.blogspot.in/2016/03/sub-processing-with-modern-c.html as well.
+
+## CMake Projects
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    cpp-subprocess
+    GIT_REPOSITORY https://github.com/arun11299/cpp-subprocess.git
+    GIT_TAG        v2.2
+)
+FetchContent_MakeAvailable(cpp-subprocess)
+
+target_link_libraries(<your_target> PRIVATE cpp-subprocess::subprocess)
+```
 
 ## Compiler Support
 Linux - g++ 4.8 and above
