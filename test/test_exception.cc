@@ -1,6 +1,6 @@
 #include <cassert>
 #include <cstring>
-#include <subprocess.hpp>
+#include <cpp-subprocess/subprocess.hpp>
 
 namespace sp = subprocess;
 
