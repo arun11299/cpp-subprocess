@@ -1,5 +1,5 @@
 #include <iostream>
-#include <subprocess.hpp>
+#include <cpp-subprocess/subprocess.hpp>
 
 using namespace subprocess;
 
