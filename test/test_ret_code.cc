@@ -1,6 +1,9 @@
 #include <iostream>
 #include <cpp-subprocess/subprocess.hpp>
+
+#ifdef __USING_WINDOWS__
 #include <Windows.h>
+#endif
 
 namespace sp = subprocess;
 
