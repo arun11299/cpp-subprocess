@@ -74,6 +74,8 @@ extern "C" {
 
   #ifdef __USING_WINDOWS__
   
+  #ifndef _WINDEF_
+
   #define CONST const
   #define WINAPI __stdcall
   
@@ -133,20 +135,24 @@ extern "C" {
   typedef WCHAR* LPWSTR;
   typedef CONST WCHAR* LPCWSTR;
   
-  typedef struct _SECURITY_ATTRIBUTES {
+  typedef struct _SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES, * LPSECURITY_ATTRIBUTES;
+  typedef struct _PROCESS_INFORMATION PROCESS_INFORMATION, * LPPROCESS_INFORMATION;
+  typedef struct _STARTUPINFOW STARTUPINFOW, * LPSTARTUPINFOW;
+
+  typedef struct _SP_SECURITY_ATTRIBUTES {
       DWORD nLength;
       LPVOID lpSecurityDescriptor;
       BOOL bInheritHandle;
-  } SECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+  } SP_SECURITY_ATTRIBUTES, * SP_LPSECURITY_ATTRIBUTES;
   
-  typedef struct _PROCESS_INFORMATION {
+  typedef struct _SP_PROCESS_INFORMATION {
       HANDLE hProcess;
       HANDLE hThread;
       DWORD dwProcessId;
       DWORD dwThreadId;
-  } PROCESS_INFORMATION, *LPPROCESS_INFORMATION;
+  } SP_PROCESS_INFORMATION, * SP_LPPROCESS_INFORMATION;
   
-  typedef struct _STARTUPINFOW {
+  typedef struct _SP_STARTUPINFOW {
       DWORD cb;
       LPWSTR lpReserved;
       LPWSTR lpDesktop;
@@ -165,23 +171,31 @@ extern "C" {
       HANDLE hStdInput;
       HANDLE hStdOutput;
       HANDLE hStdError;
-  } STARTUPINFOW, * LPSTARTUPINFOW;
+  } SP_STARTUPINFOW, * SP_LPSTARTUPINFOW;
   
-  BOOL   WINAPI CloseHandle(HANDLE);
-  BOOL   WINAPI CreatePipe(PHANDLE, PHANDLE, LPSECURITY_ATTRIBUTES, DWORD);
-  BOOL   WINAPI CreateProcessW(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
-  BOOL   WINAPI FreeEnvironmentStringsW(LPWCH);
-  BOOL   WINAPI GetExitCodeProcess(HANDLE, LPDWORD);
-  BOOL   WINAPI SetHandleInformation(HANDLE, DWORD, DWORD);
-  BOOL   WINAPI TerminateProcess(HANDLE, UINT);
-  DWORD  WINAPI FormatMessageA(DWORD, LPCVOID, DWORD, DWORD, LPSTR, DWORD, va_list*);
-  DWORD  WINAPI GetLastError(VOID);
-  DWORD  WINAPI WaitForSingleObject(HANDLE, DWORD);
-  HLOCAL WINAPI LocalFree(HLOCAL);
-  LPWSTR WINAPI GetEnvironmentStringsW(VOID);
+   __declspec(dllimport) BOOL   WINAPI CloseHandle(HANDLE);
+   __declspec(dllimport) BOOL   WINAPI CreatePipe(PHANDLE, PHANDLE, LPSECURITY_ATTRIBUTES, DWORD);
+   __declspec(dllimport) BOOL   WINAPI CreateProcessW(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
+   __declspec(dllimport) BOOL   WINAPI FreeEnvironmentStringsW(LPWCH);
+   __declspec(dllimport) BOOL   WINAPI GetExitCodeProcess(HANDLE, LPDWORD);
+   __declspec(dllimport) BOOL   WINAPI SetHandleInformation(HANDLE, DWORD, DWORD);
+   __declspec(dllimport) BOOL   WINAPI TerminateProcess(HANDLE, UINT);
+   __declspec(dllimport) DWORD  WINAPI FormatMessageA(DWORD, LPCVOID, DWORD, DWORD, LPSTR, DWORD, va_list*);
+   __declspec(dllimport) DWORD  WINAPI GetLastError(VOID);
+   __declspec(dllimport) DWORD  WINAPI WaitForSingleObject(HANDLE, DWORD);
+   __declspec(dllimport) HLOCAL WINAPI LocalFree(HLOCAL);
+   __declspec(dllimport) LPWSTR WINAPI GetEnvironmentStringsW(VOID);
   
   #define ZeroMemory(Destination,Length) memset((Destination),0,(Length))
   #define MAKELANGID(p, s) ((((WORD)(s)) << 10) | (WORD)(p))
+
+  #else
+
+  #define SP_SECURITY_ATTRIBUTES SECURITY_ATTRIBUTES
+  #define SP_PROCESS_INFORMATION PROCESS_INFORMATION
+  #define SP_STARTUPINFOW        STARTUPINFOW
+
+  #endif
 
   #include <io.h>
   #include <cwchar>
@@ -417,15 +431,15 @@ namespace util
 
   inline void configure_pipe(HANDLE* read_handle, HANDLE* write_handle, HANDLE* child_handle)
   {
-    SECURITY_ATTRIBUTES saAttr;
+    SP_SECURITY_ATTRIBUTES saAttr;
 
     // Set the bInheritHandle flag so pipe handles are inherited.
-    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.nLength = sizeof(SP_SECURITY_ATTRIBUTES);
     saAttr.bInheritHandle = TRUE;
     saAttr.lpSecurityDescriptor = NULL;
 
     // Create a pipe for the child process's STDIN.
-    if (!CreatePipe(read_handle, write_handle, &saAttr,0))
+    if (!CreatePipe(read_handle, write_handle, reinterpret_cast<LPSECURITY_ATTRIBUTES>(&saAttr), 0))
       throw OSError("CreatePipe", 0);
 
     // Ensure the write handle to the pipe for STDIN is not inherited.
@@ -1677,19 +1691,19 @@ inline void Popen::execute_process() noexcept(false)
   // CreateProcessW can modify szCmdLine so we allocate needed memory
   wchar_t *szCmdline = new wchar_t[command_line.size() + 1];
   wcscpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
-  PROCESS_INFORMATION piProcInfo;
-  STARTUPINFOW siStartInfo;
+  SP_PROCESS_INFORMATION piProcInfo;
+  SP_STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
   DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW;
 
   // Set up members of the PROCESS_INFORMATION structure.
-  ZeroMemory(&piProcInfo, sizeof(PROCESS_INFORMATION));
+  ZeroMemory(&piProcInfo, sizeof(SP_PROCESS_INFORMATION));
 
   // Set up members of the STARTUPINFOW structure.
   // This structure specifies the STDIN and STDOUT handles for redirection.
 
-  ZeroMemory(&siStartInfo, sizeof(STARTUPINFOW));
-  siStartInfo.cb = sizeof(STARTUPINFOW);
+  ZeroMemory(&siStartInfo, sizeof(SP_STARTUPINFOW));
+  siStartInfo.cb = sizeof(SP_STARTUPINFOW);
 
   siStartInfo.hStdError = this->stream_.g_hChildStd_ERR_Wr;
   siStartInfo.hStdOutput = this->stream_.g_hChildStd_OUT_Wr;
@@ -1708,8 +1722,8 @@ inline void Popen::execute_process() noexcept(false)
                             creation_flags,	// creation flags
                             environment_string_table_ptr,  // use provided environment
                             cwd_arg,      // use provided current directory
-                            &siStartInfo, // STARTUPINFOW pointer
-                            &piProcInfo); // receives PROCESS_INFORMATION
+                            reinterpret_cast<LPSTARTUPINFOW>(&siStartInfo), // STARTUPINFOW pointer
+                            reinterpret_cast<LPPROCESS_INFORMATION>(&piProcInfo)); // receives PROCESS_INFORMATION
 
   // If an error occurs, exit the application.
   if (!bSuccess) {
@@ -2262,5 +2276,14 @@ OutBuffer pipeline(Args&&... args)
 }
 
 }
+
+#ifdef __USING_WINDOWS__
+  #ifndef _WINDEF_
+    #undef ZeroMemory
+    #undef MAKELANGID
+    #undef STATUS_WAIT_0
+    #undef WAIT_OBJECT_0
+  #endif
+#endif
 
 #endif // SUBPROCESS_HPP

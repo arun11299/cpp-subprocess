@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cpp-subprocess/subprocess.hpp>
+#include <Windows.h>
 
 namespace sp = subprocess;
 
