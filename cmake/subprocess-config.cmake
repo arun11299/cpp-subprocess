@@ -1,3 +1,6 @@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+
 set(SUBPROCESS_VERSION @PROJECT_VERSION@)
 
 @PACKAGE_INIT@
