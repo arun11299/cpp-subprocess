@@ -1719,7 +1719,7 @@ inline void Popen::execute_process() noexcept(false)
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
                             TRUE,         // handles are inherited
-                            creation_flags,	// creation flags
+                            creation_flags, // creation flags
                             environment_string_table_ptr,  // use provided environment
                             cwd_arg,      // use provided current directory
                             reinterpret_cast<LPSTARTUPINFOW>(&siStartInfo), // STARTUPINFOW pointer
