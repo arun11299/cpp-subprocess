@@ -14,7 +14,7 @@ void test_exception()
 #ifdef __USING_WINDOWS__
     assert(std::strstr(e.what(), "CreateProcess failed: The system cannot find the file specified."));
 #else
-    assert(std::strstr(e.what(), "execve failed: No such file or directory"));
+    assert(std::strstr(e.what(), "execvpe failed: 0x"));
 #endif
     caught = true;
   }

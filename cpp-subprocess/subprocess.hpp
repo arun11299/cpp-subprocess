@@ -1180,15 +1180,25 @@ public:
   Child(Popen* p, int err_wr_pipe):
     parent_(p),
     err_wr_pipe_(err_wr_pipe)
-  {}
+  {
+    populate_execve_args();
+  }
 
-  void execute_child();
+  // This function prepares the child state and then executes it via execve.
+  // It never returns. Errors will be signaled via the child's exit code.
+  [[noreturn]] void execute_child();
 
 private:
+  void populate_execve_args();
+  [[noreturn]] void exit_with_error(const char *msg, int err);
+
   // Lets call it parent even though
   // technically a bit incorrect
   Popen* parent_ = nullptr;
   int err_wr_pipe_ = -1;
+  std::vector<char*> cargv_;
+  std::vector<char*> cenvp_;
+  std::vector<std::string> env_storage_;
 };
 
 // Fwd Decl.
@@ -1488,7 +1498,6 @@ private:
   template <typename F, typename... Args>
   void init_args(F&& farg, Args&&... args);
   void init_args();
-  void populate_c_argv();
   void execute_process() noexcept(false);
 
 private:
@@ -1514,7 +1523,6 @@ private:
   std::string args_;
   // Command provided as sequence
   std::vector<std::string> vargs_;
-  std::vector<char*> cargv_;
 
   bool child_created_ = false;
   // Pid of the child process
@@ -1523,9 +1531,7 @@ private:
   int retcode_ = -1;
 };
 
-inline void Popen::init_args() {
-  populate_c_argv();
-}
+inline void Popen::init_args() {}
 
 template <typename F, typename... Args>
 inline void Popen::init_args(F&& farg, Args&&... args)
@@ -1533,14 +1539,6 @@ inline void Popen::init_args(F&& farg, Args&&... args)
   detail::ArgumentDeducer argd(this);
   argd.set_option(std::forward<F>(farg));
   init_args(std::forward<Args>(args)...);
-}
-
-inline void Popen::populate_c_argv()
-{
-  cargv_.clear();
-  cargv_.reserve(vargs_.size() + 1);
-  for (auto& arg : vargs_) cargv_.push_back(&arg[0]);
-  cargv_.push_back(nullptr);
 }
 
 inline void Popen::start_process() noexcept(false)
@@ -1764,14 +1762,15 @@ inline void Popen::execute_process() noexcept(false)
     vargs_.clear();
     vargs_.insert(vargs_.begin(), {"/bin/sh", "-c"});
     vargs_.push_back(new_cmd);
-    populate_c_argv();
   }
 
   if (exe_name_.length()) {
     vargs_.insert(vargs_.begin(), exe_name_);
-    populate_c_argv();
   }
   exe_name_ = vargs_[0];
+
+  // Create this before the fork, as the constructor may allocate.
+  detail::Child chld(this, err_wr_pipe);
 
   child_pid_ = fork();
 
@@ -1791,7 +1790,6 @@ inline void Popen::execute_process() noexcept(false)
     //Close the read end of the error pipe
     subprocess_close(err_rd_pipe);
 
-    detail::Child chld(this, err_wr_pipe);
     chld.execute_child();
   }
   else
@@ -1890,101 +1888,163 @@ namespace detail {
     popen_->has_preexec_fn_ = true;
   }
 
+  inline void Child::populate_execve_args() {
+    cargv_.clear();
+    cargv_.reserve(parent_->vargs_.size() + 1);
+    for (const auto& arg : parent_->vargs_) {
+      cargv_.push_back(const_cast<char*>(arg.c_str()));
+    }
+    cargv_.push_back(nullptr);
 
-  inline void Child::execute_child() {
+    cenvp_.clear();
+
+    // Add all the original environment variables that are not overridden by
+    // entries in `parent_->env_`.
+    for (char **penv = environ; *penv; ++penv) {
+      char *env = *penv;
+      char *env_eq = strchr(env, '=');
+      if (!env_eq) {
+        cenvp_.push_back(env);
+        continue;
+      }
+      std::string env_name(env, env_eq - env);
+      if (parent_->env_.find(env_name) == parent_->env_.end()) {
+        cenvp_.push_back(env);
+        continue;
+      }
+    }
+
+    // Format all entries in `parent_->env_` as "NAME=VALUE" and add them to
+    // `cenvp_`.
+    env_storage_.reserve(parent_->env_.size());
+    for (const auto &pair : parent_->env_) {
+      std::string entry;
+      entry.reserve(pair.first.length() + 1 + pair.second.length());
+      entry += pair.first;
+      entry += '=';
+      entry += pair.second;
+      env_storage_.emplace_back(std::move(entry));
+    }
+
+    // Do this as a separate loop to avoid relying on pointer stability.
+    for (const auto &env : env_storage_) {
+      cenvp_.push_back(const_cast<char*>(env.c_str()));
+    }
+
+    cenvp_.push_back(nullptr);
+  }
+
+  [[noreturn]] inline void Child::exit_with_error(const char *msg, int err) {
+    // ATTN: Can we do something on errors from util::write_n here?
+    // TODO: Give back stack trace ?
+
+    // Adapt formatting of OSError without memory allocations.
+    util::write_n(err_wr_pipe_, msg, strlen(msg));
+    util::write_n(err_wr_pipe_, ": ", 2);
+
+    auto nibble_to_hex = [](unsigned char nibble) -> char {
+      assert(nibble < 16);
+      return "0123456789abcdef"[nibble];
+    };
+
+    // We don't use strerror or sprintf out of concern that they may allocate
+    // memory.
+    char err_str[2 + sizeof(err) * 2];
+    char *p = err_str;
+    *p++ = '0';
+    *p++ = 'x';
+    for (size_t i = 0; i < sizeof(err); ++i) {
+      unsigned char byte = (err >> (8 * (sizeof(err) - 1 - i))) & 0xFF;
+      *p++ = nibble_to_hex((byte >> 4) & 0xF);
+      *p++ = nibble_to_hex((byte >> 0) & 0xF);
+    }
+    util::write_n(err_wr_pipe_, err_str, p - err_str);
+    _exit(EXIT_FAILURE);
+  }
+
+  // Note: This function performs the required logic in the child process prior
+  // to execve. In multithreaded processes, the state of the forkee is fragile
+  // because only the thread that called fork() is duplicated into the child.
+  // For example, the heap may be in an inconsistent state, because another
+  // thread was in the middle of performing a heap operation like malloc().
+  // This function must therefore restrict itself to operations that are safe,
+  // like syscalls. It must also avoid throwing exceptions, as that may involve
+  // heap allocations.
+  [[noreturn]] inline void Child::execute_child() {
 #ifndef __USING_WINDOWS__
     int sys_ret = -1;
     auto& stream = parent_->stream_;
 
-    try {
-      if (stream.write_to_parent_ == 0)
-        stream.write_to_parent_ = dup(stream.write_to_parent_);
+    if (stream.write_to_parent_ == 0)
+      stream.write_to_parent_ = dup(stream.write_to_parent_);
 
-      if (stream.err_write_ == 0 || stream.err_write_ == 1)
-        stream.err_write_ = dup(stream.err_write_);
+    if (stream.err_write_ == 0 || stream.err_write_ == 1)
+      stream.err_write_ = dup(stream.err_write_);
 
-      // Make the child owned descriptors as the
-      // stdin, stdout and stderr for the child process
-      auto _dup2_ = [](int fd, int to_fd) {
-        if (fd == to_fd) {
-          // dup2 syscall does not reset the
-          // CLOEXEC flag if the descriptors
-          // provided to it are same.
-          // But, we need to reset the CLOEXEC
-          // flag as the provided descriptors
-          // are now going to be the standard
-          // input, output and error
-          util::set_clo_on_exec(fd, false);
-        } else if(fd != -1) {
-          int res = dup2(fd, to_fd);
-          if (res == -1) throw OSError("dup2 failed", errno);
-        }
-      };
-
-      // Create the standard streams
-      _dup2_(stream.read_from_parent_, 0); // Input stream
-      _dup2_(stream.write_to_parent_,  1); // Output stream
-      _dup2_(stream.err_write_,        2); // Error stream
-
-      // Close the duped descriptors
-      if (stream.read_from_parent_ != -1 && stream.read_from_parent_ > 2)
-        subprocess_close(stream.read_from_parent_);
-
-      if (stream.write_to_parent_ != -1 && stream.write_to_parent_ > 2)
-        subprocess_close(stream.write_to_parent_);
-
-      if (stream.err_write_ != -1 && stream.err_write_ > 2)
-        subprocess_close(stream.err_write_);
-
-      // Close all the inherited fd's except the error write pipe
-      if (parent_->close_fds_) {
-        int max_fd = sysconf(_SC_OPEN_MAX);
-        if (max_fd == -1) throw OSError("sysconf failed", errno);
-
-        for (int i = 3; i < max_fd; i++) {
-          if (i == err_wr_pipe_) continue;
-          subprocess_close(i);
-        }
+    // Make the child owned descriptors as the
+    // stdin, stdout and stderr for the child process
+    auto _dup2_ = [&](int fd, int to_fd) {
+      if (fd == to_fd) {
+        // dup2 syscall does not reset the
+        // CLOEXEC flag if the descriptors
+        // provided to it are same.
+        // But, we need to reset the CLOEXEC
+        // flag as the provided descriptors
+        // are now going to be the standard
+        // input, output and error
+        util::set_clo_on_exec(fd, false);
+      } else if(fd != -1) {
+        int res = dup2(fd, to_fd);
+        if (res == -1) exit_with_error("dup2 failed", errno);
       }
+    };
 
-      // Change the working directory if provided
-      if (parent_->cwd_.length()) {
-        sys_ret = chdir(parent_->cwd_.c_str());
-        if (sys_ret == -1) throw OSError("chdir failed", errno);
+    // Create the standard streams
+    _dup2_(stream.read_from_parent_, 0); // Input stream
+    _dup2_(stream.write_to_parent_,  1); // Output stream
+    _dup2_(stream.err_write_,        2); // Error stream
+
+    // Close the duped descriptors
+    if (stream.read_from_parent_ != -1 && stream.read_from_parent_ > 2)
+      subprocess_close(stream.read_from_parent_);
+
+    if (stream.write_to_parent_ != -1 && stream.write_to_parent_ > 2)
+      subprocess_close(stream.write_to_parent_);
+
+    if (stream.err_write_ != -1 && stream.err_write_ > 2)
+      subprocess_close(stream.err_write_);
+
+    // Close all the inherited fd's except the error write pipe
+    if (parent_->close_fds_) {
+      int max_fd = sysconf(_SC_OPEN_MAX);
+      if (max_fd == -1) exit_with_error("sysconf failed", errno);
+
+      for (int i = 3; i < max_fd; i++) {
+        if (i == err_wr_pipe_) continue;
+        subprocess_close(i);
       }
-
-      if (parent_->has_preexec_fn_) {
-        parent_->preexec_fn_();
-      }
-
-      if (parent_->session_leader_) {
-        sys_ret = setsid();
-        if (sys_ret == -1) throw OSError("setsid failed", errno);
-      }
-
-      // Replace the current image with the executable
-      if (parent_->env_.size()) {
-        for (auto& kv : parent_->env_) {
-          setenv(kv.first.c_str(), kv.second.c_str(), 1);
-        }
-        sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
-      } else {
-        sys_ret = execvp(parent_->exe_name_.c_str(), parent_->cargv_.data());
-      }
-
-      if (sys_ret == -1) throw OSError("execve failed", errno);
-
-    } catch (const OSError& exp) {
-      // Just write the exception message
-      // TODO: Give back stack trace ?
-      std::string err_msg(exp.what());
-      //ATTN: Can we do something on error here ?
-      util::write_n(err_wr_pipe_, err_msg.c_str(), err_msg.length());
     }
 
-    // Calling application would not get this
-    // exit failure
-    _exit (EXIT_FAILURE);
+    // Change the working directory if provided
+    if (parent_->cwd_.length()) {
+      sys_ret = chdir(parent_->cwd_.c_str());
+      if (sys_ret == -1) exit_with_error("chdir failed", errno);
+    }
+
+    if (parent_->has_preexec_fn_) {
+      parent_->preexec_fn_();
+    }
+
+    if (parent_->session_leader_) {
+      sys_ret = setsid();
+      if (sys_ret == -1) exit_with_error("setsid failed", errno);
+    }
+
+    // Replace the current image with the executable.
+    execvpe(parent_->exe_name_.c_str(), cargv_.data(), cenvp_.data());
+
+    // execve only returns on error.
+    exit_with_error("execvpe failed", errno);
 #endif
   }
 
