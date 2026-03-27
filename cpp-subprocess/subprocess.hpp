@@ -1501,6 +1501,7 @@ private:
 #ifdef __USING_WINDOWS__
   HANDLE process_handle_;
   std::future<void> cleanup_future_;
+  std::wstring cmd_line_;
 #endif
 
   bool defer_process_start_ = false;
@@ -1692,9 +1693,7 @@ inline void Popen::execute_process() noexcept(false)
     util::quote_argument(argument, command_line, false);
   }
 
-  // CreateProcessW can modify szCmdLine so we allocate needed memory
-  wchar_t *szCmdline = new wchar_t[command_line.size() + 1];
-  wcscpy_s(szCmdline, command_line.size() + 1, command_line.c_str());
+  cmd_line_ = command_line;
   SP_PROCESS_INFORMATION piProcInfo;
   SP_STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
@@ -1719,7 +1718,7 @@ inline void Popen::execute_process() noexcept(false)
 
   // Create the child process.
   bSuccess = CreateProcessW(NULL,
-                            szCmdline,    // command line
+                            (wchar_t*)cmd_line_.c_str(),    // command line
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
                             TRUE,         // handles are inherited
