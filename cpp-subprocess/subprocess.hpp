@@ -1488,13 +1488,6 @@ public:
   void close_output() { stream_.output_.reset(); }
   void close_error()  { stream_.error_.reset();  }
 
-
-  ~Popen()
-  {
-#ifdef __USING_WINDOWS__
-    delete[] cmd_line_;
-#endif
-  }
 private:
   template <typename F, typename... Args>
   void init_args(F&& farg, Args&&... args);
@@ -1508,7 +1501,7 @@ private:
 #ifdef __USING_WINDOWS__
   HANDLE process_handle_;
   std::future<void> cleanup_future_;
-  wchar_t* cmd_line_ = nullptr;
+  std::wstring cmd_line_;
 #endif
 
   bool defer_process_start_ = false;
@@ -1700,9 +1693,7 @@ inline void Popen::execute_process() noexcept(false)
     util::quote_argument(argument, command_line, false);
   }
 
-  // CreateProcessW can modify szCmdLine so we allocate needed memory
-  cmd_line_ = new wchar_t[command_line.size() + 1];
-  wcscpy_s(cmd_line_, command_line.size() + 1, command_line.c_str());
+  cmd_line_ = command_line;
   SP_PROCESS_INFORMATION piProcInfo;
   SP_STARTUPINFOW siStartInfo;
   BOOL bSuccess = FALSE;
@@ -1727,7 +1718,7 @@ inline void Popen::execute_process() noexcept(false)
 
   // Create the child process.
   bSuccess = CreateProcessW(NULL,
-                            cmd_line_,    // command line
+                            (wchar_t*)cmd_line_.c_str(),    // command line
                             NULL,         // process security attributes
                             NULL,         // primary thread security attributes
                             TRUE,         // handles are inherited
