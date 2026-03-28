@@ -1384,8 +1384,7 @@ public:
 #endif
 
   template <typename... Args>
-  Popen(const std::string& cmd_args, Args&& ...args):
-    args_(cmd_args)
+  Popen(const std::string& cmd_args, Args&& ...args)
   {
     vargs_ = util::split(cmd_args);
     init_args(std::forward<Args>(args)...);
@@ -1515,8 +1514,6 @@ private:
   env_map_t env_;
   preexec_func preexec_fn_;
 
-  // Command in string format
-  std::string args_;
   // Command provided as sequence
   std::vector<std::string> vargs_;
   std::vector<char*> cargv_;
