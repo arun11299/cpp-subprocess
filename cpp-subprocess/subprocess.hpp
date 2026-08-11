@@ -547,9 +547,9 @@ namespace util
    * Parameters:
    * [in] str : Input string which needs to be split based upon the
    *            delimiters provided.
-   * [in] deleims : Delimiter characters based upon which the string needs
+   * [in] delims : Delimiter characters based upon which the string needs
    *                to be split. Default constructed to ' '(space) and '\t'(tab)
-   * [out] vector<string> : Vector of strings split at deleimiter.
+   * [out] vector<string> : Vector of strings split at delimiter.
    */
   static inline std::vector<std::string>
   split(const std::string& str, const std::string& delims=" \t")
@@ -648,7 +648,7 @@ namespace util
    * Writes `length` bytes to the file descriptor `fd`
    * from the buffer `buf`.
    * Parameters:
-   * [in] fd : The file descriptotr to write to.
+   * [in] fd : The file descriptor to write to.
    * [in] buf: Buffer from which data needs to be written to fd.
    * [in] length: The number of bytes that needs to be written from
    *              `buf` to `fd`.
@@ -689,14 +689,14 @@ namespace util
 #else
     int fd = subprocess_fileno(fp);
     int rbytes = 0;
-    int eintr_cnter = 0;
+    int eintr_counter = 0;
 
     while (1) {
       int read_bytes = read(fd, buf + rbytes, read_upto - rbytes);
       if (read_bytes == -1) {
         if (errno == EINTR) {
-          if (eintr_cnter >= 50) return -1;
-          eintr_cnter++;
+          if (eintr_counter >= 50) return -1;
+          eintr_counter++;
           continue;
         }
         return -1;
@@ -1021,7 +1021,7 @@ struct error
 // needed to provide the functionality of preexec_func
 // ATTN: Can be used only to execute functions with no
 // arguments and returning void.
-// Could have used more efficient methods, ofcourse, but
+// Could have used more efficient methods, of course, but
 // that won't yield me the consistent syntax which I am
 // aiming for. If you know, then please do let me know.
 
