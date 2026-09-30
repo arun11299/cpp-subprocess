@@ -1820,7 +1820,7 @@ inline void Popen::execute_process() noexcept(false)
         // Throw whatever information we have about child failure
         throw CalledProcessError(err_buf, retcode);
       }
-    } catch (std::exception& exp) {
+    } catch (std::exception&) {
       stream_.cleanup_fds();
       throw;
     }
